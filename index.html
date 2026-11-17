@@ -1,4 +1,4 @@
-<!doctype html>
+ <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f6f8fc"><title>ShiftTrack — Time. Money. Satisfaction.</title>
@@ -130,6 +130,8 @@ const SUPABASE_URL = 'https://qwscruerpfiljjvpevcv.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_KwiHLmnYLG93vJGbHjXBew_WlTzD5NL';
 let supabaseClient = null, cloudSession = null, cloudSyncReady = false;
 let cloudSyncTimer = null, cloudBusy = false, cloudPending = false;
+let cloudSessionChecking = false, cloudReadyUserId = null;
+const migrationKeyFor = userId => 'shifttrack.cloudFirstSync.' + userId;
 
 function cloudMessage(message, tone='gray') {
   const el=$('cloudStatus'); if(el) el.textContent=message;
@@ -163,7 +165,9 @@ async function completeFirstSync(choice,cloudRow){
     const {error}=await supabaseClient.from('user_app_data').upsert({user_id:cloudSession.user.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
     if(error){cloudMessage('Could not upload device data. Nothing was removed. '+error.message,'red');return;}
   }
-  $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;
+  try{localStorage.setItem(migrationKeyFor(cloudSession.user.id),'complete');}
+  catch(storageError){cloudMessage('First sync completed, but this browser could not save the setup marker. Keep your backup.','amber');return;}
+  $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;cloudReadyUserId=cloudSession.user.id;
   cloudMessage('Cloud sync is connected and ready.','green');
 }
 function showRecoveryForm(){
@@ -192,20 +196,39 @@ $('finishRecovery').onclick=()=>{$('recoveryOverlay').style.display='none';go('p
 
 
 async function handleCloudSession(session){
-  cloudSession=session;cloudSyncReady=false;
   if(!session){
-setCloudPanels(false);$('cloudMigrationPanel').style.display='none';cloudMessage('Signed out. Your data remains saved on this device.','gray');return;}
-  setCloudPanels(true);$('cloudAccountEmail').textContent=session.user.email||'Signed in';cloudMessage('Checking cloud data before first sync…','gray');
+    cloudSession=null;cloudSyncReady=false;cloudReadyUserId=null;
+    setCloudPanels(false);$('cloudMigrationPanel').style.display='none';
+    cloudMessage('Signed out. Your data remains saved on this device.','gray');return;
+  }
+  const userId=session.user.id;
+  cloudSession=session;
+  if(cloudReadyUserId===userId&&cloudSyncReady)return;
+  if(cloudSessionChecking)return;
+  cloudSessionChecking=true;cloudSyncReady=false;
   try{
+    setCloudPanels(true);$('cloudAccountEmail').textContent=session.user.email||'Signed in';
+    if(localStorage.getItem(migrationKeyFor(userId))==='complete'){
+      $('cloudMigrationPanel').style.display='none';
+      cloudSyncReady=true;cloudReadyUserId=userId;
+      cloudMessage('Cloud sync is connected and ready.','green');
+      return;
+    }
+    cloudMessage('Checking cloud data before first sync…','gray');
     const cloudRow=await cloudFetchData(),cloudHas=hasMeaningfulData(cloudRow?.data),localHas=hasMeaningfulData(state);
     if(cloudHas&&localHas){
       $('cloudMigrationPanel').style.display='block';
       $('useLocalData').onclick=()=>completeFirstSync('local',cloudRow);
       $('useCloudData').onclick=()=>{if(confirm('Replace the data on this device with the cloud copy? Download a backup first if needed.'))completeFirstSync('cloud',cloudRow);};
-      cloudMessage('Both local and cloud data exist. Choose which copy to use for the first sync.','amber');
+      cloudMessage('Both local and cloud data exist. Choose one source for the first sync.','amber');
     }else if(cloudHas)await completeFirstSync('cloud',cloudRow);
     else await completeFirstSync('local',cloudRow);
-  }catch(err){console.error('Cloud initialization failed:',err);cloudMessage('Could not read cloud data. Local data has not been changed. Check the table and RLS policy.','red');}
+  }catch(err){
+    console.error('Cloud initialization failed:',err);
+    cloudMessage('Could not read cloud data. Local data has not been changed. Check the table and RLS policy.','red');
+  }finally{
+    cloudSessionChecking=false;
+  }
 }
 async function initCloud(){
   if(!window.supabase?.createClient){cloudMessage('Supabase library did not load. Check your internet connection.','red');return;}
