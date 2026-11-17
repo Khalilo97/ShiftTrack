@@ -220,12 +220,15 @@ function save(){
  try{
   localStorage.setItem(STORAGE_KEY,serialized);
   try{localStorage.setItem('shifttrack.lastGood',serialized);localStorage.setItem('shifttrack.lastSavedAt',new Date().toISOString())}catch(snapshotError){}
-  if(!applyingRemoteState&&cloudSession&&cloudSyncReady){
-   cloudLocalRevision++;
-   cloudLocalDirty=true;
-   try{localStorage.setItem(pendingKeyFor(cloudSession.user.id),'pending')}catch(storageError){console.error('Could not save pending sync marker:',storageError)}
-   if(!navigator.onLine)cloudMessage('Offline. Your changes are saved on this device and will upload when internet returns.','amber');
-   else scheduleCloudSave();
+  if(!applyingRemoteState){
+   // Keep a durable marker even while the cloud session is initializing.
+   markLocalChangePending();
+   if(cloudSession&&cloudSyncReady){
+    cloudLocalRevision++;
+    cloudLocalDirty=true;
+    if(!navigator.onLine)cloudMessage('Offline. Your changes are saved on this device and will upload when internet returns.','amber');
+    else scheduleCloudSave();
+   }
   }
   const status=$('saveStatus');
   if(status)status.textContent=lang==='fr'?'Dernière sauvegarde locale : '+new Date().toLocaleString('fr-CA'):'Last local save: '+new Date().toLocaleString();
@@ -310,6 +313,13 @@ let cloudSessionChecking=false,cloudReadyUserId=null;
 let cloudPollTimer=null,cloudLastUpdatedAt=null,cloudLocalDirty=false,cloudLocalRevision=0,applyingRemoteState=false;
 const migrationKeyFor=userId=>'shifttrack.cloudFirstSync.'+userId;
 const pendingKeyFor=userId=>'shifttrack.cloudPending.'+userId;
+const LAST_CLOUD_USER_KEY='shifttrack.lastCloudUserId';
+
+function markLocalChangePending(){
+ const userId=cloudSession?.user?.id||localStorage.getItem(LAST_CLOUD_USER_KEY);
+ if(!userId)return;
+ try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(err){console.error('Could not persist pending cloud change:',err)}
+}
 
 function cloudMessage(message,tone='gray'){
  const el=$('cloudStatus');if(el)el.textContent=message;
@@ -443,6 +453,8 @@ async function handleCloudSession(session){
  }
  const userId=session.user.id;
  cloudSession=session;
+ // Remember the account so local changes can be queued even if auth is still initializing.
+ try{localStorage.setItem(LAST_CLOUD_USER_KEY,userId)}catch(storageError){console.error('Could not remember cloud account for offline sync:',storageError)}
  if(cloudReadyUserId===userId&&cloudSyncReady)return;
  if(cloudSessionChecking)return;
  cloudSessionChecking=true;cloudSyncReady=false;
