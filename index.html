@@ -1,4 +1,4 @@
- <!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -220,10 +220,10 @@ function save(){
  try{
   localStorage.setItem(STORAGE_KEY,serialized);
   try{localStorage.setItem('shifttrack.lastGood',serialized);localStorage.setItem('shifttrack.lastSavedAt',new Date().toISOString())}catch(snapshotError){}
-  // Track every local change so offline edits are uploaded after reconnection.
   if(!applyingRemoteState&&cloudSession&&cloudSyncReady){
    cloudLocalRevision++;
    cloudLocalDirty=true;
+   try{localStorage.setItem(pendingKeyFor(cloudSession.user.id),'pending')}catch(storageError){console.error('Could not save pending sync marker:',storageError)}
    if(!navigator.onLine)cloudMessage('Offline. Your changes are saved on this device and will upload when internet returns.','amber');
    else scheduleCloudSave();
   }
@@ -264,7 +264,7 @@ function render(){
  renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
  let total=state.records.reduce((s,r)=>s+workedMinutes(r),0),breaks=state.records.reduce((s,r)=>s+(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((x,b)=>x+duration(b.start,b.end),0),0);$('totalRecorded').textContent=minsFmt(total);$('recordCount').textContent=state.records.length;$('breakTotal').textContent=minsFmt(breaks);
  $('timeRows').innerHTML=state.records.length?state.records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">${t('noRecords')}</td></tr>`;
- let month=monthRecords(),allGross=state.records.reduce((s,r)=>s+recordGross(r),0);$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
+ let month=monthRecords();$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
  let by={};state.records.forEach(r=>{let j=job(r.jobId),key=r.jobId;by[key]??={name:j?.employer||'—',currency:r.currency||j?.currency||'CAD',gross:0,mins:0};by[key].gross+=recordGross(r);by[key].mins+=workedMinutes(r)});$('earningsByJob').innerHTML=Object.values(by).length?Object.values(by).map(x=>`<div class="rowitem"><div><div class="rowtitle">${escapeHtml(x.name)}</div><div class="rowmeta">${minsFmt(x.mins)} ${t('hours')}</div></div><div class="rowright">${money(x.gross,x.currency)}</div></div>`).join(''):`<div class="empty">${t('noEarnings')}</div>`;
  $('jobLimit').textContent=`${activeJobs().length} / 3 ${t('active')}`;$('weeklyTarget').value=state.settings.weeklyTarget;
  $('jobList').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="card" style="margin-bottom:12px"><div class="jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · <span class="pill ${j.status==='active'?'green':'gray'}">${t(j.status)}</span></div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div><div class="jobmeta" style="margin-top:9px">${t('frequency')}: ${escapeHtml(j.frequency)}</div><div class="actions"><button class="secondary" data-rate="${j.id}">${t('editRate')}</button>${j.status==='active'?`<button class="secondary" data-pause="${j.id}">${t('pause')}</button>`:j.status==='paused'?`<button class="secondary" data-resume="${j.id}">${t('resume')}</button>`:''}${j.status!=='ended'?`<button class="danger" data-end="${j.id}">${t('endJob')}</button>`:''}</div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
@@ -309,6 +309,7 @@ let cloudSyncTimer=null,cloudBusy=false,cloudPending=false;
 let cloudSessionChecking=false,cloudReadyUserId=null;
 let cloudPollTimer=null,cloudLastUpdatedAt=null,cloudLocalDirty=false,cloudLocalRevision=0,applyingRemoteState=false;
 const migrationKeyFor=userId=>'shifttrack.cloudFirstSync.'+userId;
+const pendingKeyFor=userId=>'shifttrack.cloudPending.'+userId;
 
 function cloudMessage(message,tone='gray'){
  const el=$('cloudStatus');if(el)el.textContent=message;
@@ -327,16 +328,26 @@ async function cloudWriteData(){
  if(cloudBusy){cloudPending=true;return}
  cloudBusy=true;
  const userId=cloudSession.user.id,revisionAtStart=cloudLocalRevision;
+ cloudLocalDirty=true;
+ try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
  const payload=JSON.parse(JSON.stringify(state));
  const writeTime=new Date().toISOString();
  try{
   const {error}=await supabaseClient.from('user_app_data').upsert({user_id:userId,data:payload,updated_at:writeTime},{onConflict:'user_id'});
   if(error)throw error;
   cloudLastUpdatedAt=writeTime;
-  if(cloudLocalRevision===revisionAtStart)cloudLocalDirty=false;
-  cloudMessage('Cloud sync is up to date. Local backup is still available.','green');
+  if(cloudLocalRevision===revisionAtStart){
+   cloudLocalDirty=false;
+   try{localStorage.removeItem(pendingKeyFor(userId))}catch(storageError){}
+  }else{
+   cloudLocalDirty=true;
+   try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
+  }
+  cloudMessage(cloudLocalDirty?'A newer local change is waiting to sync.':'Cloud sync is up to date. Local backup is still available.',cloudLocalDirty?'amber':'green');
  }catch(err){
   console.error('Cloud save failed:',err);
+  cloudLocalDirty=true;
+  try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
   cloudMessage('Cloud sync failed. Your local data is still saved. Check your connection and try Sync now.','red');
  }finally{
   cloudBusy=false;
@@ -363,7 +374,6 @@ function applyRemoteCloudState(row){
 }
 async function pullCloudUpdates(){
  if(!cloudSession||!cloudSyncReady||!supabaseClient||cloudBusy)return;
- // Local edits take priority until they have been uploaded; never silently discard them.
  if(cloudLocalDirty){await cloudWriteData();return}
  try{
   const row=await cloudFetchData();
@@ -396,7 +406,9 @@ async function completeFirstSync(choice,cloudRow){
  try{localStorage.setItem(migrationKeyFor(cloudSession.user.id),'complete')}
  catch(storageError){cloudMessage('First sync completed, but this browser could not save the setup marker. Keep your backup.','amber');return}
  $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;cloudReadyUserId=cloudSession.user.id;
- const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||new Date().toISOString();cloudLocalDirty=false;startCloudPolling();
+ const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||new Date().toISOString();cloudLocalDirty=false;
+ try{localStorage.removeItem(pendingKeyFor(cloudSession.user.id))}catch(storageError){}
+ startCloudPolling();
  cloudMessage('Cloud sync is connected and ready.','green');
 }
 function showRecoveryForm(){
@@ -439,8 +451,15 @@ async function handleCloudSession(session){
   if(localStorage.getItem(migrationKeyFor(userId))==='complete'){
    $('cloudMigrationPanel').style.display='none';
    cloudSyncReady=true;cloudReadyUserId=userId;
-   const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||null;cloudLocalDirty=false;startCloudPolling();
-   cloudMessage('Cloud sync is connected and ready.','green');
+   const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||null;
+   cloudLocalDirty=localStorage.getItem(pendingKeyFor(userId))==='pending';
+   if(cloudLocalDirty){
+    cloudMessage('A saved local change is waiting to upload. Restoring sync…','amber');
+    await cloudWriteData();
+   }
+   startCloudPolling();
+   if(cloudLocalDirty)cloudMessage('A local change is still waiting to sync. Check your connection and press Sync now.','amber');
+   else cloudMessage('Cloud sync is connected and ready.','green');
    return
   }
   cloudMessage('Checking cloud data before first sync…','gray');
