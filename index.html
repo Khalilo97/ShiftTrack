@@ -1,44 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f8fc">
+<title>ShiftTrack — Time. Money. Satisfaction.</title>
+<style>
+:root{--bg:#f5f7fb;--panel:#fff;--panel2:#f0f4fa;--text:#172033;--muted:#758198;--line:#e4e9f1;--blue:#2563eb;--blue-soft:#eaf1ff;--green:#13865d;--red:#c64b55;--amber:#a76b10;--shadow:0 10px 32px rgba(28,48,82,.055)}
+[data-theme=dark]{--bg:#101722;--panel:#182331;--panel2:#202d3d;--text:#edf2f8;--muted:#9eacbd;--line:#2b3949;--blue:#78aaff;--blue-soft:#243a58;--green:#56c99a;--red:#ff8989;--amber:#e6b65f;--shadow:0 10px 32px rgba(0,0,0,.2)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.app{max-width:1240px;margin:auto;min-height:100vh;padding-bottom:90px}
+.topbar{height:72px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:11px;font-size:18px;font-weight:800;letter-spacing:-.5px}
+.logo{width:36px;height:36px;border-radius:12px;background:var(--blue);color:white;display:grid;place-items:center;font-weight:850;box-shadow:0 5px 14px #2563eb33}
+.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:1.5px;font-weight:700;margin-top:-3px}
+.top-actions{display:flex;align-items:center;gap:9px}
+.topbtn{height:38px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);font-weight:650}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;font-weight:800}
+.layout{display:grid;grid-template-columns:218px minmax(0,1fr);gap:26px;padding:27px 28px}
+.sidebar{display:flex;flex-direction:column;gap:6px;min-height:calc(100vh - 130px)}
+.nav{border:0;background:transparent;color:var(--muted);padding:12px 13px;border-radius:12px;text-align:left;display:flex;align-items:center;gap:12px;font-weight:650}
+.nav .ico{width:22px;text-align:center;font-size:17px}
+.nav.active{background:var(--blue-soft);color:var(--blue)}
+.sidebox{margin-top:auto;border:1px solid var(--line);border-radius:15px;padding:14px;color:var(--muted);font-size:11px}
+.main{min-width:0}
+.page{display:none}
+.page.active{display:block}
+.heading{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin:2px 0 22px}
+.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);font-weight:800}
+.heading h1{font-size:27px;letter-spacing:-.8px;margin:4px 0}
+.sub{color:var(--muted);margin:0;font-size:13px}
+.date-chip{color:var(--muted);font-size:12px;padding-top:9px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:17px;box-shadow:var(--shadow);min-width:0}
+.metric-label{font-size:11px;color:var(--muted);font-weight:700}
+.metric{font-size:27px;font-weight:800;letter-spacing:-1px;margin:7px 0 2px}
+.metric-foot{font-size:11px;color:var(--muted)}
+.metric-icon{float:right;width:32px;height:32px;border-radius:10px;background:var(--blue-soft);display:grid;place-items:center;color:var(--blue)}
+.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:24px 0 12px}
+.sectionhead h2{font-size:16px;margin:0;letter-spacing:-.2px}
+.linkbtn{border:0;background:transparent;color:var(--blue);font-size:12px;font-weight:750}
+.clockcard{margin-top:14px;display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:center}
+.clocktime{font-size:36px;font-weight:850;letter-spacing:-1.5px;margin:6px 0}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--green);font-weight:700}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.primary,.secondary,.danger{border:0;border-radius:11px;padding:10px 15px;font-weight:750}
+.primary{background:var(--blue);color:#fff}
+.primary:disabled,.secondary:disabled{opacity:.42;cursor:not-allowed}
+.secondary{background:var(--panel2);color:var(--text)}
+.danger{background:#fff0f0;color:#b53e3e}
+.progress{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:10px 0 7px}
+.progress span{display:block;height:100%;background:var(--blue);width:0;border-radius:99px}
+.rows{padding:2px 15px}
+.rowitem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.rowitem:last-child{border-bottom:0}
+.rowleft{display:flex;align-items:center;gap:11px;min-width:0}
+.datebox{width:43px;height:45px;border-radius:11px;background:var(--panel2);display:grid;place-items:center;text-align:center;font-size:9px;color:var(--muted);line-height:1.1;flex:none}
+.datebox b{display:block;font-size:16px;color:var(--text)}
+.rowtitle{font-size:13px;font-weight:750}
+.rowmeta{font-size:11px;color:var(--muted);margin-top:2px}
+.rowright{text-align:right;font-size:12px;font-weight:750;white-space:nowrap}
+.pill{font-size:10px;padding:4px 8px;border-radius:99px;background:var(--blue-soft);color:var(--blue);font-weight:750;white-space:nowrap}
+.pill.green{background:#e8f7ef;color:#147a50}
+.pill.gray{background:var(--panel2);color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:13px 0}
+.field label{display:block;font-size:11px;color:var(--muted);font-weight:750;margin-bottom:5px}
+.field input,.field select{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--text);padding:10px 11px;border-radius:10px;outline:none;min-width:0}
+.field input:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+.field.full{grid-column:1/-1}
+.tablewrap{overflow:auto}
+.table{width:100%;border-collapse:collapse;font-size:12px;min-width:560px}
+.table th,.table td{text-align:left;padding:12px 9px;border-bottom:1px solid var(--line)}
+.table th{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.table td:last-child,.table th:last-child{text-align:right}
+.empty{padding:22px 8px;text-align:center;color:var(--muted);font-size:12px}
+.mutedbox{padding:13px;background:var(--panel2);border-radius:12px;color:var(--muted);font-size:12px}
+.jobcard{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.jobname{font-weight:800}
+.jobmeta{font-size:11px;color:var(--muted);margin-top:3px}
+.jobrate{font-weight:800;font-size:16px;text-align:right}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--panel);padding:11px 16px;border-radius:12px;font-size:12px;display:none;z-index:30;box-shadow:var(--shadow);max-width:90vw}
+.mobilebar{display:none}
+.small{font-size:11px;color:var(--muted)}
+.inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.divider{height:1px;background:var(--line);margin:14px 0}
+.warning{color:var(--amber)}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.layout{grid-template-columns:190px 1fr;gap:18px;padding:22px 18px}}
+@media(max-width:680px){.topbar{height:62px;padding:0 15px}.layout{display:block;padding:19px 14px}.sidebar{display:none}.heading h1{font-size:24px}.date-chip{display:none}.grid{gap:9px}.card{padding:14px;border-radius:15px}.metric{font-size:23px}.clockcard{grid-template-columns:1fr}.two,.three{grid-template-columns:1fr}.mobilebar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);padding:7px 3px calc(7px + env(safe-area-inset-bottom));justify-content:space-around;z-index:20}.mobilebar button{border:0;background:transparent;color:var(--muted);font-size:9px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 8px}.mobilebar button.active{color:var(--blue);font-weight:800}.mobilebar span{font-size:17px}.formgrid{grid-template-columns:1fr 1fr}.topbtn{padding:0 9px;font-size:12px}.avatar{display:none}}
+.weekbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 12px}
+.weekbar h2{font-size:16px;margin:0}
+.weeknav{display:flex;align-items:center;gap:7px}
+.weeknav button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:9px;padding:7px 10px;font-weight:700}
+.weekrange{font-size:12px;font-weight:750;color:var(--muted);min-width:145px;text-align:center}
+.weekgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.weekday{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 8px;min-height:155px;min-width:0}
+.weekday.today{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.weekdayhead{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:9px}
+.weekdayname{font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:800}
+.weekdaynum{font-size:16px;font-weight:850}
+.day-shift{border-radius:9px;background:var(--blue-soft);padding:7px;margin:6px 0;overflow:hidden}
+.day-shift b{display:block;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--blue)}
+.day-shift span{font-size:9px;color:var(--muted);display:block;margin-top:3px}
+.day-add{border:1px dashed var(--line);background:transparent;color:var(--blue);border-radius:8px;width:100%;padding:6px 3px;font-size:10px;font-weight:750;margin-top:5px}
+.weekempty{font-size:10px;color:var(--muted);padding:7px 0;min-height:28px}
+@media(max-width:900px){.weekgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:680px){.weekgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.weekday{min-height:130px}.weekrange{min-width:0;font-size:10px}.weekbar{align-items:flex-start}.weeknav{gap:4px}.weeknav button{padding:7px 8px}}
+.recovery-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:100}
+.recovery-card{width:min(100%,430px);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+.recovery-card h2{margin:0 0 7px;font-size:22px}
+.recovery-card p{color:var(--muted);font-size:13px}
+.recovery-card .field{margin:14px 0}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="topbar">
+<div class="brand"><div class="logo">S</div><div>ShiftTrack<small>TIME. MONEY. SATISFACTION.</small></div></div>
+<div class="top-actions"><button class="topbtn" id="langBtn">FR</button><button class="topbtn" id="themeBtn" aria-label="Toggle theme">☾</button><div class="avatar">ST</div></div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar"></aside>
+<main class="main">
+<section class="page active" id="home">
+<div class="heading"><div><div class="eyebrow" data-i="overview">OVERVIEW</div><h1 data-i="greeting">Your work, at a glance.</h1><p class="sub" data-i="homeSub">Your time and earnings across every job.</p></div><div class="date-chip" id="todayLabel"></div></div>
+<div class="grid">
+<div class="card"><div class="metric-icon">◷</div><div class="metric-label" data-i="weekHours">Hours this week</div><div class="metric" id="homeHours">0h 00m</div><div class="metric-foot" data-i="recordedTime">Recorded working time</div></div>
+<div class="card"><div class="metric-icon">＄</div><div class="metric-label" data-i="grossWeek">Estimated gross pay</div><div class="metric" id="homeGross">$0.00</div><div class="metric-foot" data-i="beforeDeductions">Before deductions</div></div>
+<div class="card"><div class="metric-icon">▦</div><div class="metric-label" data-i="nextShift">Next scheduled shift</div><div class="metric" id="homeNext" style="font-size:19px">—</div><div class="metric-foot" id="homeNextMeta">—</div></div>
+<div class="card"><div class="metric-icon">▣</div><div class="metric-label" data-i="activeJobs">Active jobs</div><div class="metric" id="homeJobs">0 / 3</div><div class="metric-foot" data-i="separateJobs">Separate rates and schedules</div></div>
+</div>
+<div class="card clockcard">
+<div><div class="eyebrow" data-i="timeClock">TIME CLOCK</div><div class="clocktime" id="liveTimer">00:00:00</div><div class="status" id="clockStatus"><span class="dot"></span><span data-i="ready">Ready when you are</span></div><div class="field" style="max-width:330px;margin-top:12px"><label data-i="clockJob">Job for this shift</label><select id="clockJob"></select></div><div class="actions"><button class="primary" id="clockInBtn" data-i="clockIn">Clock in</button><button class="secondary" id="breakBtn" disabled data-i="startBreak">Start unpaid break</button><button class="secondary" id="clockOutBtn" disabled data-i="clockOut">Clock out</button></div></div>
+<div><div class="metric-label" data-i="weeklyTarget">Weekly work target</div><div class="metric" id="targetLabel">0h <span class="small">/ 40h</span></div><div class="progress"><span id="targetProgress"></span></div><div class="small" id="targetText">0% of your weekly target</div><p class="small" data-i="targetNote">Change your target in Profile.</p></div>
+</div>
+<div class="sectionhead"><h2 data-i="upcoming">Upcoming shifts</h2><button class="linkbtn" data-goto="schedule" data-i="viewSchedule">View schedule →</button></div><div class="card rows" id="homeUpcoming"></div>
+<div class="sectionhead"><h2 data-i="jobsOverview">Your jobs</h2><button class="linkbtn" data-goto="profile" data-i="manageJobs">Manage jobs →</button></div><div class="two" id="homeJobCards"></div>
+</section>
+<section class="page" id="schedule">
+<div class="heading"><div><div class="eyebrow" data-i="planning">PLANNING</div><h1 data-i="scheduleTitle">My schedule</h1><p class="sub" data-i="scheduleSub">Keep every employer's shifts in one place.</p></div></div>
+<div class="card"><div class="sectionhead" style="margin-top:0"><h2 data-i="addShift">Add a shift</h2><span class="pill" data-i="personalShift">Personal schedule</span></div>
+<div class="formgrid"><div class="field"><label data-i="job">Job</label><select id="shiftJob"></select></div><div class="field"><label data-i="shiftName">Shift label</label><input id="shiftLabel" placeholder="e.g. Evening shift"></div><div class="field"><label data-i="date">Date</label><input type="date" id="shiftDate"></div><div class="field"><label data-i="start">Start time</label><input type="time" id="shiftStart" value="09:00"></div><div class="field"><label data-i="end">End time</label><input type="time" id="shiftEnd" value="17:00"></div><div class="field"><label data-i="unpaidBreak">Unpaid break (minutes)</label><input type="number" id="shiftBreak" min="0" value="30"></div></div>
+<button class="primary" id="addShiftBtn" data-i="saveShift">Add to schedule</button><p class="small" data-i="scheduleDisclaimer">These are your planned shifts. They do not change actual time records.</p></div>
+<div class="weekbar"><h2 data-i="weeklyPlanner">Plan your week</h2><div class="weeknav"><button type="button" id="prevPlannerWeek" aria-label="Previous week">‹</button><span class="weekrange" id="plannerWeekRange"></span><button type="button" id="nextPlannerWeek" aria-label="Next week">›</button><button type="button" id="currentPlannerWeek" data-i="thisWeek">This week</button></div></div>
+<div class="weekgrid" id="weeklyPlanner"></div>
+<div class="sectionhead"><h2 data-i="allShifts">All scheduled shifts</h2><span class="small" id="shiftCount">0 shifts</span></div><div class="card rows" id="scheduleRows"></div>
+</section>
+<section class="page" id="time">
+<div class="heading"><div><div class="eyebrow" data-i="actualRecords">ACTUAL RECORDS</div><h1 data-i="timeTitle">Time clock & timesheets</h1><p class="sub" data-i="timeSub">Actual punches are kept separate from planned shifts.</p></div></div>
+<div class="grid"><div class="card"><div class="metric-label" data-i="totalHours">Total recorded hours</div><div class="metric" id="totalRecorded">0h 00m</div></div><div class="card"><div class="metric-label" data-i="completedShifts">Completed shifts</div><div class="metric" id="recordCount">0</div></div><div class="card"><div class="metric-label" data-i="unpaidBreaks">Unpaid breaks</div><div class="metric" id="breakTotal">0h 00m</div></div><div class="card"><div class="metric-label" data-i="activeClock">Clock status</div><div class="metric" id="timeStatus" style="font-size:17px">Not clocked in</div></div></div>
+<div class="sectionhead"><h2 data-i="history">Time history</h2><button class="secondary" id="exportCsv" data-i="exportCsv">Export CSV</button></div>
+<div class="card tablewrap"><table class="table"><thead><tr><th data-i="date">Date</th><th data-i="job">Job</th><th data-i="clockIn">Clock in</th><th data-i="clockOut">Clock out</th><th data-i="worked">Worked</th><th data-i="gross">Gross estimate</th></tr></thead><tbody id="timeRows"></tbody></table></div>
+<p class="small" data-i="timeNote">Keep your own records. This prototype is not an official employer timesheet.</p>
+</section>
+<section class="page" id="money">
+<div class="heading"><div><div class="eyebrow" data-i="moneyLabel">MONEY</div><h1 data-i="moneyTitle">Your earnings</h1><p class="sub" data-i="moneySub">A transparent view of recorded hours and estimated gross pay.</p></div></div>
+<div class="grid"><div class="card"><div class="metric-label" data-i="weekGrossLabel">This week's gross estimate</div><div class="metric" id="moneyWeek">$0.00</div></div><div class="card"><div class="metric-label" data-i="monthGrossLabel">This month's gross estimate</div><div class="metric" id="moneyMonth">$0.00</div></div><div class="card"><div class="metric-label" data-i="allTimeHours">All-time recorded hours</div><div class="metric" id="moneyHours">0h 00m</div></div><div class="card"><div class="metric-label" data-i="jobsCount">Jobs contributing</div><div class="metric" id="moneyJobs">0</div></div></div>
+<div class="sectionhead"><h2 data-i="byJob">Earnings by job</h2></div><div class="card rows" id="earningsByJob"></div>
+<div class="mutedbox" style="margin-top:14px" data-i="grossDisclaimer">These are basic gross estimates: recorded compensable time × the hourly rate saved when you clocked in. They exclude taxes, deductions, overtime premiums and statutory-holiday calculations. They are not a payslip or take-home-pay estimate.</div>
+</section>
+<section class="page" id="profile">
+<div class="heading"><div><div class="eyebrow" data-i="personalWorkspace">PERSONAL WORKSPACE</div><h1 data-i="profileTitle">Profile & jobs</h1><p class="sub" data-i="profileSub">Manage your employers, hourly rates and preferences.</p></div></div>
+<div class="two">
+<div class="card"><div class="sectionhead" style="margin-top:0"><h2 data-i="addJob">Add a job</h2><span class="pill" id="jobLimit">0 / 3 active</span></div>
+<div class="field"><label data-i="employer">Employer name</label><input id="employerName" placeholder="e.g. Coffee shop"></div>
+<div class="field" style="margin-top:10px"><label data-i="jobTitle">Job title</label><input id="jobTitle" placeholder="e.g. Team member"></div>
+<div class="formgrid"><div class="field"><label data-i="hourlyRate">Hourly rate</label><input type="number" id="jobRate" min="0" step="0.01" placeholder="18.00"></div><div class="field"><label data-i="currency">Currency</label><select id="jobCurrency"><option value="CAD">CAD — Canadian dollar</option><option value="USD">USD — US dollar</option><option value="EUR">EUR — Euro</option><option value="TND">TND — Tunisian dinar</option></select></div><div class="field full"><label data-i="payFrequency">Pay frequency</label><select id="jobFrequency"><option>Weekly</option><option selected>Biweekly</option><option>Semi-monthly</option><option>Monthly</option></select></div></div>
+<button class="primary full" id="addJobBtn" data-i="saveJob">Save job</button><p class="small" data-i="jobLimitNote">Up to 3 active jobs in this first version. Paused and ended jobs remain in your history.</p></div>
+<div class="card"><div class="sectionhead" style="margin-top:0"><h2>☁ ShiftTrack Cloud</h2><span class="pill gray" id="cloudBadge">Not connected</span></div>
+<p class="small" id="cloudStatus">Sign in to securely sync your jobs, shifts and time records across devices.</p>
+<div id="cloudAuthPanel"><div class="field"><label>Email</label><input type="email" id="cloudEmail" autocomplete="email" placeholder="you@example.com"></div><div class="field" style="margin-top:10px"><label>Password</label><input type="password" id="cloudPassword" autocomplete="current-password" placeholder="At least 8 characters"></div>
+<div class="actions"><button class="primary" id="cloudSignIn">Log in</button><button class="secondary" id="cloudSignUp">Create account</button></div>
+<button class="linkbtn" id="cloudResetPassword" style="margin-top:8px;padding-left:0">Forgot password?</button></div>
+<div id="cloudAccountPanel" style="display:none"><div class="small" id="cloudAccountEmail"></div><div class="actions"><button class="secondary" id="cloudSyncNow">Sync now</button><button class="secondary" id="cloudSignOut">Log out</button></div></div>
+<div id="cloudMigrationPanel" class="mutedbox" style="display:none;margin-top:12px"><b>Choose which data to keep</b><p class="small">Both this device and your cloud account contain data. Choose one source for the first sync. The other source will not be overwritten until you confirm.</p><div class="actions"><button class="primary" id="useLocalData">Keep this device's data</button><button class="secondary" id="useCloudData">Use cloud data</button></div></div>
+<div class="small" style="margin-top:10px">Your local backup and restore tools remain available. Cloud sync requires an internet connection.</div>
+</div>
+<div class="card"><div class="sectionhead" style="margin-top:0"><h2 data-i="preferences">Preferences</h2></div><div class="field"><label data-i="weeklyTargetSetting">Weekly work target (hours)</label><input type="number" id="weeklyTarget" min="1" max="100" value="40"></div>
+<button class="secondary full" id="saveTarget" style="margin-top:10px" data-i="savePreferences">Save preferences</button><div class="divider"></div>
+<div class="field"><label data-i="dataTools">Your data</label><div class="actions"><button class="secondary" id="backupBtn" data-i="downloadBackup">Download backup</button><button class="secondary" id="restoreBtn" data-i="restoreBackup">Restore backup</button><input id="restoreFile" type="file" accept="application/json,.json" hidden></div><p class="small" id="saveStatus" data-i="saveStatus">Automatic saving is on. Download a backup regularly.</p></div>
+<div class="divider"></div><div class="field"><label data-i="dangerZone">Danger zone</label><button class="danger" id="resetBtn" data-i="resetDemo">Reset demo</button></div><p class="small" data-i="localStorageNote">This prototype stores data only in this browser on this device. Cloud accounts and sync are not connected yet.</p>
+</div>
+</div>
+<div class="sectionhead"><h2 data-i="yourJobs">Your jobs</h2></div><div id="jobList" class="two"></div>
+</section>
+</main>
+</div>
+<nav class="mobilebar" id="mobilebar"></nav>
+</div>
+<div class="toast" id="toast"></div>
+<div class="recovery-overlay" id="recoveryOverlay" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
+<div class="recovery-card"><h2 id="recoveryTitle">Set a new password</h2><p id="recoveryDescription">Choose a new password for your ShiftTrack account.</p>
+<div id="recoveryForm"><div class="field"><label for="recoveryPassword">New password</label><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></div><div class="field"><label for="recoveryPasswordConfirm">Confirm new password</label><input id="recoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Enter the password again"></div><div class="actions"><button class="primary" id="saveNewPassword">Save new password</button></div></div>
+<div class="small" id="recoveryMessage" role="status" aria-live="polite"></div><div class="actions" id="recoveryDoneActions" style="display:none"><button class="primary" id="finishRecovery">Continue to ShiftTrack</button></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const $=id=>document.getElementById(id),today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`},uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36),escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const translations={en:{navHome:'Home',navSchedule:'Schedule',navTime:'Time Clock',navMoney:'Money',navProfile:'Profile',overview:'OVERVIEW',greeting:'Your work, at a glance.',homeSub:'Your time and earnings across every job.',weekHours:'Hours this week',recordedTime:'Recorded working time',grossWeek:'Estimated gross pay',beforeDeductions:'Before deductions',nextShift:'Next scheduled shift',activeJobs:'Active jobs',separateJobs:'Separate rates and schedules',timeClock:'TIME CLOCK',ready:'Ready when you are',clockJob:'Job for this shift',clockIn:'Clock in',clockOut:'Clock out',startBreak:'Start unpaid break',endBreak:'End break',weeklyTarget:'Weekly work target',targetNote:'Change your target in Profile.',upcoming:'Upcoming shifts',viewSchedule:'View schedule →',jobsOverview:'Your jobs',manageJobs:'Manage jobs →',planning:'PLANNING',scheduleTitle:'My schedule',weeklyPlanner:'Plan your week',thisWeek:'This week',addDayShift:'+ Add',noDayShift:'No shift planned',scheduleSub:"Keep every employer's shifts in one place.",addShift:'Add a shift',personalShift:'Personal schedule',job:'Job',shiftName:'Shift label',date:'Date',start:'Start time',end:'End time',unpaidBreak:'Unpaid break (minutes)',saveShift:'Add to schedule',scheduleDisclaimer:'These are your planned shifts. They do not change actual time records.',allShifts:'All scheduled shifts',actualRecords:'ACTUAL RECORDS',timeTitle:'Time clock & timesheets',timeSub:'Actual punches are kept separate from planned shifts.',totalHours:'Total recorded hours',completedShifts:'Completed shifts',unpaidBreaks:'Unpaid breaks',activeClock:'Clock status',history:'Time history',exportCsv:'Export CSV',worked:'Worked',gross:'Gross estimate',timeNote:'Keep your own records. This prototype is not an official employer timesheet.',moneyLabel:'MONEY',moneyTitle:'Your earnings',moneySub:'A transparent view of recorded hours and estimated gross pay.',weekGrossLabel:"This week's gross estimate",monthGrossLabel:"This month's gross estimate",allTimeHours:'All-time recorded hours',jobsCount:'Jobs contributing',byJob:'Earnings by job',grossDisclaimer:'These are basic gross estimates: recorded compensable time × the hourly rate saved when you clocked in. They exclude taxes, deductions, overtime premiums and statutory-holiday calculations. They are not a payslip or take-home-pay estimate.',personalWorkspace:'PERSONAL WORKSPACE',profileTitle:'Profile & jobs',profileSub:'Manage your employers, hourly rates and preferences.',addJob:'Add a job',employer:'Employer name',jobTitle:'Job title',hourlyRate:'Hourly rate',currency:'Currency',payFrequency:'Pay frequency',saveJob:'Save job',jobLimitNote:'Up to 3 active jobs in this first version. Paused and ended jobs remain in your history.',preferences:'Preferences',weeklyTargetSetting:'Weekly work target (hours)',savePreferences:'Save preferences',dataTools:'Your data',downloadBackup:'Download backup',restoreBackup:'Restore backup',saveStatus:'Automatic saving is on. Download a backup regularly.',dangerZone:'Danger zone',localStorageNote:'This prototype stores data only in this browser on this device. Cloud accounts and sync are not connected yet.',yourJobs:'Your jobs',active:'Active',paused:'Paused',ended:'Ended',pause:'Pause',resume:'Resume',endJob:'End job',editRate:'Update rate',removeShift:'Remove',noJobs:'No jobs yet. Add your first employer to get started.',noShifts:'No shifts scheduled yet.',noRecords:'No completed time records yet.',noUpcoming:'No upcoming shifts.',noEarnings:'No recorded earnings yet.',selectJob:'Select a job',addJobFirst:'Add a job first',confirmEnd:'End this job? Your history will be preserved.',confirmReset:'Reset all local ShiftTrack demo data?',jobAdded:'Job saved.',jobPaused:'Job paused.',jobResumed:'Job resumed.',jobEnded:'Job ended. History preserved.',shiftAdded:'Shift added.',shiftRemoved:'Shift removed.',clockedIn:'Clock-in recorded.',breakStarted:'Unpaid break started.',breakEnded:'Break ended.',clockedOut:'Clock-out recorded.',limitReached:'You can have up to 3 active jobs.',needJob:'Add an active job first.',invalidShift:'Check the date and shift times.',targetSaved:'Weekly target saved.',rateSaved:'Hourly rate updated.',notClocked:'Not clocked in',clockedStatus:'Clocked in',onBreak:'On unpaid break',noActiveJobs:'No active jobs',shift:'shift',shifts:'shifts',hours:'hours',grossPay:'Gross pay',rate:'Rate',frequency:'Pay frequency',personal:'Personal',currencyMissing:'—',notSet:'Not set'},fr:{navHome:'Accueil',navSchedule:'Horaire',navTime:'Pointage',navMoney:'Revenus',navProfile:'Profil',overview:'APERÇU',greeting:'Votre travail, en un coup d’œil.',homeSub:'Vos heures et revenus pour tous vos emplois.',weekHours:'Heures cette semaine',recordedTime:'Temps de travail enregistré',grossWeek:'Salaire brut estimé',beforeDeductions:'Avant déductions',nextShift:'Prochain quart prévu',activeJobs:'Emplois actifs',separateJobs:'Taux et horaires distincts',timeClock:'POINTEUSE',ready:'Prêt quand vous l’êtes',clockJob:'Emploi pour ce quart',clockIn:'Pointer l’entrée',clockOut:'Pointer la sortie',startBreak:'Débuter une pause non payée',endBreak:'Terminer la pause',weeklyTarget:'Objectif hebdomadaire',targetNote:'Modifiez votre objectif dans Profil.',upcoming:'Quarts à venir',viewSchedule:'Voir l’horaire →',jobsOverview:'Vos emplois',manageJobs:'Gérer les emplois →',planning:'PLANIFICATION',scheduleTitle:'Mon horaire',weeklyPlanner:'Planifier ma semaine',thisWeek:'Cette semaine',addDayShift:'+ Ajouter',noDayShift:'Aucun quart prévu',scheduleSub:'Tous vos quarts au même endroit.',addShift:'Ajouter un quart',personalShift:'Horaire personnel',job:'Emploi',shiftName:'Nom du quart',date:'Date',start:'Heure de début',end:'Heure de fin',unpaidBreak:'Pause non payée (minutes)',saveShift:'Ajouter à l’horaire',scheduleDisclaimer:'Ce sont vos quarts planifiés. Ils ne modifient pas les pointages réels.',allShifts:'Tous les quarts planifiés',actualRecords:'POINTAGES RÉELS',timeTitle:'Pointeuse et feuilles de temps',timeSub:'Les pointages réels sont distincts des quarts planifiés.',totalHours:'Total des heures enregistrées',completedShifts:'Quarts terminés',unpaidBreaks:'Pauses non payées',activeClock:'État du pointage',history:'Historique du temps',exportCsv:'Exporter CSV',worked:'Travaillé',gross:'Brut estimé',timeNote:'Conservez vos propres dossiers. Ce prototype n’est pas une feuille de temps officielle.',moneyLabel:'REVENUS',moneyTitle:'Vos revenus',moneySub:'Une vue claire des heures enregistrées et du salaire brut estimé.',weekGrossLabel:'Estimation brute cette semaine',monthGrossLabel:'Estimation brute ce mois-ci',allTimeHours:'Total des heures enregistrées',jobsCount:'Emplois contributeurs',byJob:'Revenus par emploi',grossDisclaimer:'Estimations brutes de base : temps rémunérable enregistré × taux horaire sauvegardé au pointage. Les impôts, déductions, majorations d’heures supplémentaires et calculs de jours fériés sont exclus. Ce n’est ni un talon de paie ni une estimation du salaire net.',personalWorkspace:'ESPACE PERSONNEL',profileTitle:'Profil et emplois',profileSub:'Gérez vos employeurs, taux horaires et préférences.',addJob:'Ajouter un emploi',employer:'Nom de l’employeur',jobTitle:'Titre du poste',hourlyRate:'Taux horaire',currency:'Devise',payFrequency:'Fréquence de paie',saveJob:'Enregistrer',jobLimitNote:'Jusqu’à 3 emplois actifs dans cette première version. Les emplois en pause ou terminés restent dans votre historique.',preferences:'Préférences',weeklyTargetSetting:'Objectif hebdomadaire (heures)',savePreferences:'Enregistrer les préférences',dataTools:'Vos données',downloadBackup:'Télécharger une sauvegarde',restoreBackup:'Restaurer une sauvegarde',saveStatus:'Sauvegarde automatique activée. Téléchargez régulièrement une copie.',dangerZone:'Zone sensible',resetDemo:'Réinitialiser la démo',localStorageNote:'Ce prototype conserve les données uniquement dans ce navigateur sur cet appareil. Les comptes et la synchronisation infonuagique ne sont pas encore connectés.',yourJobs:'Vos emplois',active:'Actif',paused:'En pause',ended:'Terminé',pause:'Mettre en pause',resume:'Reprendre',endJob:'Terminer',editRate:'Modifier le taux',removeShift:'Retirer',noJobs:'Aucun emploi. Ajoutez votre premier employeur pour commencer.',noShifts:'Aucun quart planifié.',noRecords:'Aucun pointage terminé.',noUpcoming:'Aucun quart à venir.',noEarnings:'Aucun revenu enregistré.',selectJob:'Choisir un emploi',addJobFirst:'Ajoutez d’abord un emploi',confirmEnd:'Terminer cet emploi? Votre historique sera conservé.',confirmReset:'Réinitialiser toutes les données locales de démonstration ShiftTrack?',jobAdded:'Emploi enregistré.',jobPaused:'Emploi mis en pause.',jobResumed:'Emploi repris.',jobEnded:'Emploi terminé. Historique conservé.',shiftAdded:'Quart ajouté.',shiftRemoved:'Quart retiré.',clockedIn:'Entrée enregistrée.',breakStarted:'Pause non payée commencée.',breakEnded:'Pause terminée.',clockedOut:'Sortie enregistrée.',limitReached:'Vous pouvez avoir jusqu’à 3 emplois actifs.',needJob:'Ajoutez d’abord un emploi actif.',invalidShift:'Vérifiez la date et les heures du quart.',targetSaved:'Objectif hebdomadaire enregistré.',rateSaved:'Taux horaire mis à jour.',notClocked:'Aucun pointage actif',clockedStatus:'Pointé',onBreak:'En pause non payée',noActiveJobs:'Aucun emploi actif',shift:'quart',shifts:'quarts',hours:'heures',grossPay:'Salaire brut',rate:'Taux',frequency:'Fréquence de paie',personal:'Personnel',currencyMissing:'—',notSet:'Non défini'}};
+let lang=localStorage.getItem('shifttrack.lang')||'en',theme=localStorage.getItem('shifttrack.theme')||'light';
+const emptyState=()=>({jobs:[],shifts:[],records:[],active:null,settings:{weeklyTarget:40}});
+function loadSavedState(){try{const current=JSON.parse(localStorage.getItem('shifttrack.v2')||'null');if(current&&Array.isArray(current.jobs)&&Array.isArray(current.shifts)&&Array.isArray(current.records))return current}catch(e){}try{const backup=JSON.parse(localStorage.getItem('shifttrack.lastGood')||'null');if(backup&&Array.isArray(backup.jobs)&&Array.isArray(backup.shifts)&&Array.isArray(backup.records))return backup}catch(e){}return emptyState()}
+let state=loadSavedState();
+let scheduleWeekOffset=0;
+const t=k=>translations[lang][k]||translations.en[k]||k;
+const money=(n,c='CAD')=>new Intl.NumberFormat(lang==='fr'?'fr-CA':'en-CA',{style:'currency',currency:c}).format(Number(n)||0);
+const dateFmt=(s,opts={weekday:'short',month:'short',day:'numeric'})=>new Date(s+'T12:00:00').toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',opts);
+const timeFmt=s=>s?new Date(s).toLocaleTimeString(lang==='fr'?'fr-CA':'en-CA',{hour:'numeric',minute:'2-digit'}):'—';
+const minsFmt=m=>`${Math.floor(m/60)}h ${String(Math.round(m%60)).padStart(2,'0')}m`;
+const STORAGE_KEY='shifttrack.v2';
+function save(){
+ const serialized=JSON.stringify(state);
+ try{
+  localStorage.setItem(STORAGE_KEY,serialized);
+  try{localStorage.setItem('shifttrack.lastGood',serialized);localStorage.setItem('shifttrack.lastSavedAt',new Date().toISOString())}catch(snapshotError){}
+  if(!applyingRemoteState){
+   // Keep a durable marker even while the cloud session is initializing.
+   markLocalChangePending();
+   if(cloudSession&&cloudSyncReady){
+    cloudLocalRevision++;
+    cloudLocalDirty=true;
+    if(!navigator.onLine)cloudMessage('Offline. Your changes are saved on this device and will upload when internet returns.','amber');
+    else scheduleCloudSave();
+   }
+  }
+  const status=$('saveStatus');
+  if(status)status.textContent=lang==='fr'?'Dernière sauvegarde locale : '+new Date().toLocaleString('fr-CA'):'Last local save: '+new Date().toLocaleString();
+  return true;
+ }catch(err){
+  const status=$('saveStatus');
+  if(status)status.textContent=lang==='fr'?'ÉCHEC de sauvegarde — téléchargez une copie immédiatement.':'SAVE FAILED — download a backup immediately.';
+  toast(lang==='fr'?'Échec de sauvegarde. Téléchargez une copie.':'Save failed. Download a backup.');
+  return false;
+ }
+}
+const toast=m=>{let el=$('toast');el.textContent=m;el.style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.style.display='none',2300)};
+const activeJobs=()=>state.jobs.filter(j=>j.status==='active');
+const job=id=>state.jobs.find(j=>j.id===id);
+const duration=(a,b)=>Math.max(0,(new Date(b)-new Date(a))/60000);
+function weekStart(d=new Date()){let x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-(x.getDay()+6)%7);return x}
+function inWeek(iso){let d=new Date(iso+'T12:00:00'),a=weekStart(),b=new Date(a);b.setDate(b.getDate()+7);return d>=a&&d<b}
+function workedMinutes(r){if(!r.clockOut)return 0;let elapsed=duration(r.clockIn,r.clockOut),unpaid=(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((s,b)=>s+duration(b.start,b.end),0);return Math.max(0,Math.round(elapsed-unpaid))}
+function recordGross(r){return workedMinutes(r)/60*(Number(r.rateSnapshot)||0)}
+function weekRecords(){return state.records.filter(r=>inWeek(r.date))}
+function monthRecords(){let m=today().slice(0,7);return state.records.filter(r=>r.date.slice(0,7)===m)}
+function moneySummary(records){let groups={};records.forEach(r=>{let c=r.currency||job(r.jobId)?.currency||'CAD';groups[c]=(groups[c]||0)+recordGross(r)});let entries=Object.entries(groups);return entries.length?entries.map(([c,v])=>`${money(v,c)} ${c}`).join(' · '):money(0,'CAD')}
+function navItems(){let items=[['home','⌂','navHome'],['schedule','▦','navSchedule'],['time','◷','navTime'],['money','＄','navMoney'],['profile','⚙','navProfile']];$('sidebar').innerHTML=items.map(([id,ic,k])=>`<button class="nav ${id==='home'?'active':''}" data-tab="${id}"><span class="ico">${ic}</span>${t(k)}</button>`).join('')+`<div class="sidebox"><b>ShiftTrack</b><br>${lang==='fr'?'Espace personnel de travail.':'Your personal work assistant.'}<br><br>${lang==='fr'?'Les données restent sur cet appareil dans cette démo.':'Data stays on this device in this demo.'}</div>`;$('mobilebar').innerHTML=items.map(([id,ic,k])=>`<button class="${id==='home'?'active':''}" data-tab="${id}"><span>${ic}</span>${t(k)}</button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>go(b.dataset.tab));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>go(b.dataset.goto))}
+function go(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));window.scrollTo({top:0,behavior:'smooth'});render()}
+function applyLanguage(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(el=>{let k=el.dataset.i;if(translations[lang][k])el.textContent=t(k)});$('langBtn').textContent=lang==='en'?'FR':'EN';navItems();render()}
+function applyTheme(){document.documentElement.dataset.theme=theme;$('themeBtn').textContent=theme==='dark'?'☀':'☾';localStorage.setItem('shifttrack.theme',theme)}
+function fillJobSelect(id,includePaused=false){let list=includePaused?state.jobs:activeJobs();$(id).innerHTML=list.length?list.map(j=>`<option value="${j.id}">${escapeHtml(j.employer)} — ${escapeHtml(j.title||'')}</option>`).join(''):`<option value="">${t('addJobFirst')}</option>`}
+function render(){
+ let wr=weekRecords(),weekM=wr.reduce((s,r)=>s+workedMinutes(r),0),weekG=wr.reduce((s,r)=>s+recordGross(r),0),up=state.shifts.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start))[0];
+ $('todayLabel').textContent=new Date().toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+ $('homeHours').textContent=minsFmt(weekM);$('homeGross').textContent=moneySummary(wr);$('homeNext').textContent=up?dateFmt(up.date,{weekday:'short',month:'short',day:'numeric'}):'—';$('homeNextMeta').textContent=up?`${up.start} – ${up.end} · ${job(up.jobId)?.employer||''}`:t('noUpcoming');$('homeJobs').textContent=`${activeJobs().length} / 3`;
+ $('targetLabel').innerHTML=`${(weekM/60).toFixed(1)}h <span class="small">/ ${state.settings.weeklyTarget}h</span>`;let pct=Math.min(100,weekM/60/(state.settings.weeklyTarget||40)*100);$('targetProgress').style.width=pct+'%';$('targetText').textContent=`${Math.round(pct)}% ${lang==='fr'?'de votre objectif':'of your weekly target'}`;
+ fillJobSelect('clockJob');fillJobSelect('shiftJob');$('clockJob').disabled=!!state.active||!activeJobs().length;$('clockInBtn').disabled=!!state.active||!activeJobs().length;$('clockOutBtn').disabled=!state.active;$('breakBtn').disabled=!state.active;$('breakBtn').textContent=state.active?.breakOpen?t('endBreak'):t('startBreak');
+ $('clockStatus').innerHTML=state.active?`<span class="dot"></span>${state.active.breakOpen?t('onBreak'):t('clockedStatus')} · ${job(state.active.jobId)?.employer||''}`:`<span class="dot"></span>${t(activeJobs().length?'ready':'noActiveJobs')}`;$('timeStatus').textContent=state.active?(state.active.breakOpen?t('onBreak'):t('clockedStatus')):t('notClocked');
+ let upcoming=state.shifts.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).slice(0,4);$('homeUpcoming').innerHTML=upcoming.length?upcoming.map(shiftRow).join(''):`<div class="empty">${t('noUpcoming')}</div>`;$('homeJobCards').innerHTML=activeJobs().length?activeJobs().map(j=>`<div class="card jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · ${t('frequency')}: ${escapeHtml(j.frequency)}</div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
+ renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
+ let total=state.records.reduce((s,r)=>s+workedMinutes(r),0),breaks=state.records.reduce((s,r)=>s+(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((x,b)=>x+duration(b.start,b.end),0),0);$('totalRecorded').textContent=minsFmt(total);$('recordCount').textContent=state.records.length;$('breakTotal').textContent=minsFmt(breaks);
+ $('timeRows').innerHTML=state.records.length?state.records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">${t('noRecords')}</td></tr>`;
+ let month=monthRecords();$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
+ let by={};state.records.forEach(r=>{let j=job(r.jobId),key=r.jobId;by[key]??={name:j?.employer||'—',currency:r.currency||j?.currency||'CAD',gross:0,mins:0};by[key].gross+=recordGross(r);by[key].mins+=workedMinutes(r)});$('earningsByJob').innerHTML=Object.values(by).length?Object.values(by).map(x=>`<div class="rowitem"><div><div class="rowtitle">${escapeHtml(x.name)}</div><div class="rowmeta">${minsFmt(x.mins)} ${t('hours')}</div></div><div class="rowright">${money(x.gross,x.currency)}</div></div>`).join(''):`<div class="empty">${t('noEarnings')}</div>`;
+ $('jobLimit').textContent=`${activeJobs().length} / 3 ${t('active')}`;$('weeklyTarget').value=state.settings.weeklyTarget;
+ $('jobList').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="card" style="margin-bottom:12px"><div class="jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · <span class="pill ${j.status==='active'?'green':'gray'}">${t(j.status)}</span></div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div><div class="jobmeta" style="margin-top:9px">${t('frequency')}: ${escapeHtml(j.frequency)}</div><div class="actions"><button class="secondary" data-rate="${j.id}">${t('editRate')}</button>${j.status==='active'?`<button class="secondary" data-pause="${j.id}">${t('pause')}</button>`:j.status==='paused'?`<button class="secondary" data-resume="${j.id}">${t('resume')}</button>`:''}${j.status!=='ended'?`<button class="danger" data-end="${j.id}">${t('endJob')}</button>`:''}</div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
+}
+function shiftRow(s,withRemove=false){let d=new Date(s.date+'T12:00:00');return `<div class="rowitem"><div class="rowleft"><div class="datebox">${d.toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',{weekday:'short'}).toUpperCase()}<b>${d.getDate()}</b></div><div><div class="rowtitle">${escapeHtml(s.label||'Work shift')}</div><div class="rowmeta">${escapeHtml(job(s.jobId)?.employer||'—')} · ${s.start} – ${s.end} · ${s.breakMin||0}m ${lang==='fr'?'pause':'break'}</div></div></div><div class="rowright">${withRemove?`<button class="linkbtn" data-remove-shift="${s.id}">${t('removeShift')}</button>`:`<span class="pill">${escapeHtml(job(s.jobId)?.title||'Shift')}</span>`}</div></div>`}
+function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function plannerWeekStart(){let d=weekStart();d.setDate(d.getDate()+scheduleWeekOffset*7);return d}
+function renderWeeklyPlanner(){
+ const start=plannerWeekStart(),end=new Date(start);end.setDate(end.getDate()+6);
+ $('plannerWeekRange').textContent=`${dateFmt(isoLocal(start),{month:'short',day:'numeric'})} – ${dateFmt(isoLocal(end),{month:'short',day:'numeric',year:'numeric'})}`;
+ const days=Array.from({length:7},(_,i)=>{let d=new Date(start);d.setDate(d.getDate()+i);return d});
+ $('weeklyPlanner').innerHTML=days.map(d=>{
+  const iso=isoLocal(d),items=state.shifts.filter(x=>x.date===iso).sort((a,b)=>a.start.localeCompare(b.start));
+  return `<div class="weekday ${iso===today()?'today':''}"><div class="weekdayhead"><span class="weekdayname">${d.toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',{weekday:'short'}).replace('.','')}</span><span class="weekdaynum">${d.getDate()}</span></div>${items.length?items.map(x=>`<div class="day-shift"><b>${escapeHtml(x.label||'Work shift')}</b><span>${escapeHtml(job(x.jobId)?.employer||'—')}</span><span>${x.start}–${x.end}</span><button class="linkbtn" style="font-size:9px;padding:3px 0" data-remove-shift="${x.id}">${t('removeShift')}</button></div>`).join(''):`<div class="weekempty">${t('noDayShift')}</div>`}<button class="day-add" data-add-day="${iso}">${t('addDayShift')}</button></div>`;
+ }).join('');
+}
+$('addJobBtn').onclick=()=>{let employer=$('employerName').value.trim(),title=$('jobTitle').value.trim(),rate=Number($('jobRate').value);if(!employer||!Number.isFinite(rate)||rate<0){toast(lang==='fr'?'Entrez un employeur et un taux valide.':'Enter an employer and a valid hourly rate.');return}if(activeJobs().length>=3){toast(t('limitReached'));return}state.jobs.push({id:uid(),employer,title,rate,currency:$('jobCurrency').value,frequency:$('jobFrequency').value,status:'active',createdAt:new Date().toISOString()});save();$('employerName').value='';$('jobTitle').value='';$('jobRate').value='';render();toast(t('jobAdded'))};
+$('jobList').onclick=e=>{let b=e.target.closest('button');if(!b)return;let j=job(b.dataset.pause||b.dataset.resume||b.dataset.end||b.dataset.rate);if(!j)return;if(b.dataset.pause){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de mettre cet emploi en pause.':'Clock out before pausing this job.');return}j.status='paused';toast(t('jobPaused'))}if(b.dataset.resume){if(activeJobs().length>=3){toast(t('limitReached'));return}j.status='active';toast(t('jobResumed'))}if(b.dataset.end){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de terminer cet emploi.':'Clock out before ending this job.');return}if(!confirm(t('confirmEnd')))return;j.status='ended';toast(t('jobEnded'))}if(b.dataset.rate){let v=prompt(lang==='fr'?'Nouveau taux horaire :':'New hourly rate:',String(j.rate));if(v!==null&&v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0){j.rate=Number(v);toast(t('rateSaved'))}}save();render()};
+$('prevPlannerWeek').onclick=()=>{scheduleWeekOffset--;renderWeeklyPlanner()};
+$('nextPlannerWeek').onclick=()=>{scheduleWeekOffset++;renderWeeklyPlanner()};
+$('currentPlannerWeek').onclick=()=>{scheduleWeekOffset=0;renderWeeklyPlanner()};
+$('weeklyPlanner').onclick=e=>{let a=e.target.closest('[data-add-day]'),r=e.target.closest('[data-remove-shift]');if(a){$('shiftDate').value=a.dataset.addDay;$('shiftLabel').scrollIntoView({behavior:'smooth',block:'center'});$('shiftLabel').focus();return}if(r){state.shifts=state.shifts.filter(x=>x.id!==r.dataset.removeShift);save();render()}};
+$('addShiftBtn').onclick=()=>{let jobId=$('shiftJob').value,date=$('shiftDate').value,start=$('shiftStart').value,end=$('shiftEnd').value;if(!jobId||!date||!start||!end||end===start){toast(t('invalidShift'));return}state.shifts.push({id:uid(),jobId,date,start,end,label:$('shiftLabel').value.trim()||'Work shift',breakMin:Math.max(0,Number($('shiftBreak').value)||0),source:'personal'});save();$('shiftLabel').value='';render();toast(t('shiftAdded'))};
+$('scheduleRows').onclick=e=>{let b=e.target.closest('[data-remove-shift]');if(b){state.shifts=state.shifts.filter(s=>s.id!==b.dataset.removeShift);save();render();toast(t('shiftRemoved'))}};
+$('clockInBtn').onclick=()=>{if(state.active||!job($('clockJob').value))return;let j=job($('clockJob').value);state.active={id:uid(),jobId:j.id,clockIn:new Date().toISOString(),date:today(),rateSnapshot:Number(j.rate),currency:j.currency,breaks:[],breakOpen:false};save();render();toast(t('clockedIn'))};
+$('breakBtn').onclick=()=>{if(!state.active)return;if(state.active.breakOpen){let b=state.active.breaks[state.active.breaks.length-1];b.end=new Date().toISOString();state.active.breakOpen=false;toast(t('breakEnded'))}else{state.active.breaks.push({start:new Date().toISOString(),end:null,paid:false});state.active.breakOpen=true;toast(t('breakStarted'))}save();render()};
 $('clockOutBtn').onclick=async()=>{
-  if(!state.active)return;
-
-  if(state.active.breakOpen){
-    toast(lang==='fr'
-      ?'Terminez votre pause avant de pointer la sortie.'
-      :'End your break before clocking out.');
-    return;
-  }
-
-  // Preserve the original state in case local saving fails.
-  const previousActive=JSON.parse(JSON.stringify(state.active));
-  const previousRecords=state.records.slice();
-
-  const completedRecord={
-    ...previousActive,
-    breaks:previousActive.breaks.map(b=>({...b})),
-    clockOut:new Date().toISOString()
-  };
-
-  // Add the completed shift before clearing the active clock.
-  state.records.push(completedRecord);
-  state.active=null;
-
-  // Save locally first.
-  const saved=save();
-
-  if(!saved){
-    state.records=previousRecords;
-    state.active=previousActive;
-    render();
-    toast('SAVE FAILED. Your clock is still active. Download a backup.');
-    return;
-  }
-
+ if(!state.active)return;
+ if(state.active.breakOpen){
+  toast(lang==='fr'?'Terminez votre pause avant de pointer la sortie.':'End your break before clocking out.');
+  return;
+ }
+ const previousActive=JSON.parse(JSON.stringify(state.active));
+ const previousRecords=state.records.slice();
+ const completedRecord={...previousActive,breaks:(previousActive.breaks||[]).map(b=>({...b})),clockOut:new Date().toISOString()};
+ state.records.push(completedRecord);
+ state.active=null;
+ const saved=save();
+ if(!saved){
+  state.records=previousRecords;
+  state.active=previousActive;
   render();
-  toast(t('clockedOut'));
-
-  // Upload the completed record immediately when cloud sync is ready.
-  if(cloudSession&&cloudSyncReady&&navigator.onLine){
-    clearTimeout(cloudSyncTimer);
-    await cloudWriteData();
-  }
+  toast('SAVE FAILED. Your clock is still active. Download a backup.');
+  return;
+ }
+ render();
+ toast(t('clockedOut'));
+ if(cloudSession&&cloudSyncReady&&navigator.onLine){
+  clearTimeout(cloudSyncTimer);
+  await cloudWriteData();
+ }
 };
+$('saveTarget').onclick=()=>{state.settings.weeklyTarget=Math.min(100,Math.max(1,Number($('weeklyTarget').value)||40));save();render();toast(t('targetSaved'))};
+$('exportCsv').onclick=()=>{let rows=[['Date','Job','Clock in','Clock out','Worked minutes','Gross estimate'],...state.records.map(r=>[r.date,job(r.jobId)?.employer||'',r.clockIn,r.clockOut,workedMinutes(r),recordGross(r)])];download('shifttrack-timesheets.csv',rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
+$('backupBtn').onclick=()=>{const backup={app:'ShiftTrack',schemaVersion:1,exportedAt:new Date().toISOString(),data:state};download('shifttrack-backup-'+today()+'.json',JSON.stringify(backup,null,2),'application/json');toast(lang==='fr'?'Sauvegarde téléchargée. Conservez-la en lieu sûr.':'Backup downloaded. Keep it somewhere safe.')};
+$('restoreBtn').onclick=()=>$('restoreFile').click();
+$('restoreFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());const candidate=parsed?.app==='ShiftTrack'?parsed.data:parsed;if(!candidate||!Array.isArray(candidate.jobs)||!Array.isArray(candidate.shifts)||!Array.isArray(candidate.records)||!candidate.settings||typeof candidate.settings!=='object')throw new Error('Invalid backup');if(!confirm(lang==='fr'?'Restaurer cette sauvegarde remplacera les données actuellement dans cette application. Continuer?':'Restoring this backup will replace the data currently in this app. Continue?'))return;state={jobs:candidate.jobs,shifts:candidate.shifts,records:candidate.records,active:candidate.active||null,settings:{weeklyTarget:Number(candidate.settings.weeklyTarget)||40,...candidate.settings}};if(!save())throw new Error('Could not save restored data');render();toast(lang==='fr'?'Sauvegarde restaurée.':'Backup restored.')}catch(err){toast(lang==='fr'?'Fichier de sauvegarde invalide ou impossible à lire.':'Backup file is invalid or could not be read.')}finally{e.target.value=''}};
+$('resetBtn').onclick=()=>{if(confirm(t('confirmReset'))){localStorage.removeItem(STORAGE_KEY);localStorage.removeItem('shifttrack.lastGood');localStorage.removeItem('shifttrack.lastSavedAt');location.reload()}};
+function download(name,content,type){let a=document.createElement('a'),u=URL.createObjectURL(new Blob([content],{type}));a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+if(navigator.storage?.persist){navigator.storage.persist().then(granted=>{const status=$('saveStatus');if(status&&granted)status.textContent=lang==='fr'?'Stockage persistant accordé. Téléchargez quand même des sauvegardes.':'Persistent browser storage granted. Still download backups regularly.'}).catch(()=>{})}
+
+// SUPABASE CLOUD AUTH + SAFE FIRST-SYNC
+const SUPABASE_URL='https://qwscruerpfiljjvpevcv.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KwiHLmnYLG93vJGbHjXBew_WlTzD5NL';
+let supabaseClient=null,cloudSession=null,cloudSyncReady=false;
+let cloudSyncTimer=null,cloudBusy=false,cloudPending=false;
+let cloudSessionChecking=false,cloudReadyUserId=null;
+let cloudPollTimer=null,cloudLastUpdatedAt=null,cloudLocalDirty=false,cloudLocalRevision=0,applyingRemoteState=false;
+const migrationKeyFor=userId=>'shifttrack.cloudFirstSync.'+userId;
+const pendingKeyFor=userId=>'shifttrack.cloudPending.'+userId;
+const LAST_CLOUD_USER_KEY='shifttrack.lastCloudUserId';
+
+function markLocalChangePending(){
+ const userId=cloudSession?.user?.id||localStorage.getItem(LAST_CLOUD_USER_KEY);
+ if(!userId)return;
+ try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(err){console.error('Could not persist pending cloud change:',err)}
+}
+
+function cloudMessage(message,tone='gray'){
+ const el=$('cloudStatus');if(el)el.textContent=message;
+ const badge=$('cloudBadge');
+ if(badge){badge.textContent=tone==='green'?'Connected':tone==='amber'?'Action needed':tone==='red'?'Error':'Not connected';badge.className='pill '+(tone==='green'?'green':'gray')}
+}
+function hasMeaningfulData(s){return !!(s&&((s.jobs||[]).length||(s.shifts||[]).length||(s.records||[]).length||s.active))}
+function setCloudPanels(signedIn){$('cloudAuthPanel').style.display=signedIn?'none':'block';$('cloudAccountPanel').style.display=signedIn?'block':'none'}
+async function cloudFetchData(){
+ const {data,error}=await supabaseClient.from('user_app_data').select('data,updated_at').eq('user_id',cloudSession.user.id).maybeSingle();
+ if(error)throw error;return data||null;
+}
+async function cloudWriteData(){
+ if(!cloudSession||!cloudSyncReady||!supabaseClient)return;
+ if(!navigator.onLine){cloudLocalDirty=true;cloudMessage('Offline. Your changes are saved on this device and will upload when internet returns.','amber');return}
+ if(cloudBusy){cloudPending=true;return}
+ cloudBusy=true;
+ const userId=cloudSession.user.id,revisionAtStart=cloudLocalRevision;
+ cloudLocalDirty=true;
+ try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
+ const payload=JSON.parse(JSON.stringify(state));
+ const writeTime=new Date().toISOString();
+ try{
+  const {error}=await supabaseClient.from('user_app_data').upsert({user_id:userId,data:payload,updated_at:writeTime},{onConflict:'user_id'});
+  if(error)throw error;
+  cloudLastUpdatedAt=writeTime;
+  if(cloudLocalRevision===revisionAtStart){
+   cloudLocalDirty=false;
+   try{localStorage.removeItem(pendingKeyFor(userId))}catch(storageError){}
+  }else{
+   cloudLocalDirty=true;
+   try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
+  }
+  cloudMessage(cloudLocalDirty?'A newer local change is waiting to sync.':'Cloud sync is up to date. Local backup is still available.',cloudLocalDirty?'amber':'green');
+ }catch(err){
+  console.error('Cloud save failed:',err);
+  cloudLocalDirty=true;
+  try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
+  cloudMessage('Cloud sync failed. Your local data is still saved. Check your connection and try Sync now.','red');
+ }finally{
+  cloudBusy=false;
+  if(cloudPending){cloudPending=false;scheduleCloudSave()}
+ }
+}
+function scheduleCloudSave(){if(!cloudSession||!cloudSyncReady)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(cloudWriteData,900)}
+function applyRemoteCloudState(row){
+ const incoming=row?.data;
+ if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records))return false;
+ applyingRemoteState=true;
+ try{
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:incoming.records,active:incoming.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
+  const serialized=JSON.stringify(state);
+  localStorage.setItem(STORAGE_KEY,serialized);
+  localStorage.setItem('shifttrack.lastGood',serialized);
+  localStorage.setItem('shifttrack.lastSavedAt',new Date().toISOString());
+  cloudLastUpdatedAt=row.updated_at||cloudLastUpdatedAt;
+  cloudLocalDirty=false;
+  render();
+  return true;
+ }catch(err){console.error('Could not apply cloud update locally:',err);cloudMessage('Cloud has newer data, but this device could not save it locally.','red');return false}
+ finally{applyingRemoteState=false}
+}
+async function pullCloudUpdates(){
+ if(!cloudSession||!cloudSyncReady||!supabaseClient||cloudBusy)return;
+ if(cloudLocalDirty){await cloudWriteData();return}
+ try{
+  const row=await cloudFetchData();
+  if(!row)return;
+  if(!cloudLastUpdatedAt){cloudLastUpdatedAt=row.updated_at||null;return}
+  if(row.updated_at&&row.updated_at>cloudLastUpdatedAt){
+   if(cloudLocalDirty){cloudMessage('A cloud update is available, but this device has unsynced changes. Syncing this device first.','amber');scheduleCloudSave();return}
+   applyRemoteCloudState(row);
+   cloudMessage('Latest cloud changes received.','green');
+  }
+ }catch(err){console.error('Cloud refresh failed:',err)}
+}
+function startCloudPolling(){
+ if(cloudPollTimer)clearInterval(cloudPollTimer);
+ cloudPollTimer=setInterval(pullCloudUpdates,5000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloudUpdates()});
+ window.addEventListener('focus',pullCloudUpdates);
+}
+async function completeFirstSync(choice,cloudRow){
+ if(choice==='cloud'){
+  const incoming=cloudRow?.data;
+  if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records)){cloudMessage('Cloud data could not be validated. Device data was not changed.','red');return}
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:incoming.records,active:incoming.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
+  if(!save()){cloudMessage('Could not save cloud data locally. Your device data may need a backup.','red');return}
+  render();
+ }else{
+  const {error}=await supabaseClient.from('user_app_data').upsert({user_id:cloudSession.user.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error){cloudMessage('Could not upload device data. Nothing was removed. '+error.message,'red');return}
+ }
+ try{localStorage.setItem(migrationKeyFor(cloudSession.user.id),'complete')}
+ catch(storageError){cloudMessage('First sync completed, but this browser could not save the setup marker. Keep your backup.','amber');return}
+ $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;cloudReadyUserId=cloudSession.user.id;
+ const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||new Date().toISOString();cloudLocalDirty=false;
+ try{localStorage.removeItem(pendingKeyFor(cloudSession.user.id))}catch(storageError){}
+ startCloudPolling();
+ cloudMessage('Cloud sync is connected and ready.','green');
+}
+function showRecoveryForm(){
+ $('recoveryPassword').value='';$('recoveryPasswordConfirm').value='';$('recoveryMessage').textContent='';
+ $('recoveryForm').style.display='block';$('recoveryDoneActions').style.display='none';
+ $('recoveryTitle').textContent='Set a new password';$('recoveryDescription').textContent='Choose a new password for your ShiftTrack account.';
+ $('recoveryOverlay').style.display='flex';setTimeout(()=>$('recoveryPassword').focus(),50);
+}
+$('saveNewPassword').onclick=async()=>{
+ const password=$('recoveryPassword').value,confirmPassword=$('recoveryPasswordConfirm').value;
+ if(password.length<8){$('recoveryMessage').textContent='Your password must contain at least 8 characters.';return}
+ if(password!==confirmPassword){$('recoveryMessage').textContent='The passwords do not match.';return}
+ if(!supabaseClient||!cloudSession){$('recoveryMessage').textContent='Your recovery session is missing or expired. Request a new reset email.';return}
+ $('saveNewPassword').disabled=true;$('recoveryMessage').textContent='Saving your new password…';
+ try{
+  const {error}=await supabaseClient.auth.updateUser({password});
+  if(error)throw error;
+  $('recoveryForm').style.display='none';$('recoveryTitle').textContent='Password updated';
+  $('recoveryDescription').textContent='Your ShiftTrack password has been changed successfully.';
+  $('recoveryMessage').textContent='You can now continue using ShiftTrack.';$('recoveryDoneActions').style.display='flex';
+  await handleCloudSession(cloudSession);
+ }catch(err){$('recoveryMessage').textContent=err.message||'Could not update your password. Please try again.'}
+ finally{$('saveNewPassword').disabled=false}
+};
+$('finishRecovery').onclick=()=>{$('recoveryOverlay').style.display='none';go('profile')};
+async function handleCloudSession(session){
+ if(!session){
+  cloudSession=null;cloudSyncReady=false;cloudReadyUserId=null;cloudLastUpdatedAt=null;cloudLocalDirty=false;
+  if(cloudPollTimer){clearInterval(cloudPollTimer);cloudPollTimer=null}
+  setCloudPanels(false);$('cloudMigrationPanel').style.display='none';
+  cloudMessage('Signed out. Your data remains saved on this device.','gray');return
+ }
+ const userId=session.user.id;
+ cloudSession=session;
+ // Remember the account so local changes can be queued even if auth is still initializing.
+ try{localStorage.setItem(LAST_CLOUD_USER_KEY,userId)}catch(storageError){console.error('Could not remember cloud account for offline sync:',storageError)}
+ if(cloudReadyUserId===userId&&cloudSyncReady)return;
+ if(cloudSessionChecking)return;
+ cloudSessionChecking=true;cloudSyncReady=false;
+ try{
+  setCloudPanels(true);$('cloudAccountEmail').textContent=session.user.email||'Signed in';
+  if(localStorage.getItem(migrationKeyFor(userId))==='complete'){
+   $('cloudMigrationPanel').style.display='none';
+   cloudSyncReady=true;cloudReadyUserId=userId;
+   const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||null;
+   cloudLocalDirty=localStorage.getItem(pendingKeyFor(userId))==='pending';
+   if(cloudLocalDirty){
+    cloudMessage('A saved local change is waiting to upload. Restoring sync…','amber');
+    await cloudWriteData();
+   }
+   startCloudPolling();
+   if(cloudLocalDirty)cloudMessage('A local change is still waiting to sync. Check your connection and press Sync now.','amber');
+   else cloudMessage('Cloud sync is connected and ready.','green');
+   return
+  }
+  cloudMessage('Checking cloud data before first sync…','gray');
+  const cloudRow=await cloudFetchData(),cloudHas=hasMeaningfulData(cloudRow?.data),localHas=hasMeaningfulData(state);
+  if(cloudHas&&localHas){
+   $('cloudMigrationPanel').style.display='block';
+   $('useLocalData').onclick=()=>completeFirstSync('local',cloudRow);
+   $('useCloudData').onclick=()=>{if(confirm('Replace the data on this device with the cloud copy? Download a backup first if needed.'))completeFirstSync('cloud',cloudRow)};
+   cloudMessage('Both local and cloud data exist. Choose one source for the first sync.','amber');
+  }else if(cloudHas)await completeFirstSync('cloud',cloudRow);
+  else await completeFirstSync('local',cloudRow);
+ }catch(err){
+  console.error('Cloud initialization failed:',err);
+  cloudMessage('Could not read cloud data. Local data has not been changed. Check the table and RLS policy.','red');
+ }finally{cloudSessionChecking=false}
+}
+async function initCloud(){
+ if(!window.supabase?.createClient){cloudMessage('Supabase library did not load. Check your internet connection.','red');return}
+ supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+ let recoveryEventSeen=false;
+ supabaseClient.auth.onAuthStateChange((event,session)=>setTimeout(()=>{
+  if(event==='PASSWORD_RECOVERY'){
+   recoveryEventSeen=true;cloudSession=session;cloudSyncReady=false;setCloudPanels(!!session);
+   if(session)$('cloudAccountEmail').textContent=session.user.email||'Signed in';
+   showRecoveryForm();return
+  }
+  if(event==='SIGNED_OUT'||event==='SIGNED_IN'||event==='TOKEN_REFRESHED')handleCloudSession(session);
+ },0));
+ const recoveryInUrl=window.location.hash.includes('type=recovery')||new URLSearchParams(window.location.search).get('type')==='recovery';
+ const {data,error}=await supabaseClient.auth.getSession();
+ if(error)cloudMessage('Could not check login session: '+error.message,'red');
+ if(!recoveryInUrl&&!recoveryEventSeen)await handleCloudSession(data.session);
+}
+$('cloudSignIn').onclick=async()=>{
+ const email=$('cloudEmail').value.trim(),password=$('cloudPassword').value;
+ if(!email||!password){cloudMessage('Enter your email and password.','amber');return}
+ $('cloudSignIn').disabled=true;const {error}=await supabaseClient.auth.signInWithPassword({email,password});$('cloudSignIn').disabled=false;
+ if(error)cloudMessage(error.message,'red');
+};
+$('cloudSignUp').onclick=async()=>{
+ const email=$('cloudEmail').value.trim(),password=$('cloudPassword').value;
+ if(!email||password.length<8){cloudMessage('Enter a valid email and a password with at least 8 characters.','amber');return}
+ $('cloudSignUp').disabled=true;
+ const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{display_name:email.split('@')[0]}}});
+ $('cloudSignUp').disabled=false;
+ if(error)cloudMessage(error.message,'red');
+ else if(!data.session)cloudMessage('Account created. Check your email to confirm, then log in.','green');
+ else cloudMessage('Account created successfully.','green');
+};
+$('cloudResetPassword').onclick=async()=>{
+ const email=$('cloudEmail').value.trim();if(!email){cloudMessage('Enter your email first.','amber');return}
+ const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:'https://khalilo97.github.io/ShiftTrack/'});
+ cloudMessage(error?error.message:'If the account exists, a password reset email has been sent.',error?'red':'green');
+};
+$('cloudSignOut').onclick=async()=>{
+ if(!confirm('Log out of ShiftTrack Cloud? Local data will remain on this device.'))return;
+ const {error}=await supabaseClient.auth.signOut();if(error)cloudMessage(error.message,'red');
+};
+$('cloudSyncNow').onclick=async()=>{
+ cloudMessage('Checking for updates…');
+ if(!navigator.onLine){cloudMessage('Offline. Your changes remain saved on this device and will upload when internet returns.','amber');return}
+ if(cloudLocalDirty)await cloudWriteData();
+ else{await pullCloudUpdates();if(!cloudLocalDirty)cloudMessage('Cloud sync is up to date. Local backup is still available.','green')}
+};
+window.addEventListener('online',()=>{
+ if(cloudSession&&cloudSyncReady&&cloudLocalDirty){
+  cloudMessage('Internet restored. Uploading your saved changes…','amber');
+  cloudWriteData();
+ }
+});
+window.addEventListener('offline',()=>{
+ if(cloudSession&&cloudSyncReady)cloudMessage('Offline. Changes will be saved here and uploaded after reconnection.','amber');
+});
+setCloudPanels(false);
+$('langBtn').onclick=()=>{lang=lang==='en'?'fr':'en';localStorage.setItem('shifttrack.lang',lang);applyLanguage()};
+$('themeBtn').onclick=()=>{theme=theme==='dark'?'light':'dark';applyTheme()};
+$('shiftDate').value=today();navItems();applyTheme();applyLanguage();
+function tick(){if(state.active){let ms=Date.now()-new Date(state.active.clockIn).getTime();let paused=(state.active.breaks||[]).filter(b=>!b.paid).reduce((s,b)=>s+(b.end?new Date(b.end)-new Date(b.start):Date.now()-new Date(b.start)),0);let sec=Math.max(0,Math.floor((ms-paused)/1000));$('liveTimer').textContent=[Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,'0')).join(':')}else $('liveTimer').textContent='00:00:00'}
+tick();initCloud();setInterval(tick,1000);setInterval(()=>{if(state.active)render()},15000);
+</script>
+</body>
+</html>
