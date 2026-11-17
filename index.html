@@ -12,6 +12,10 @@
 .weekbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 12px}.weekbar h2{font-size:16px;margin:0}.weeknav{display:flex;align-items:center;gap:7px}.weeknav button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:9px;padding:7px 10px;font-weight:700}.weekrange{font-size:12px;font-weight:750;color:var(--muted);min-width:145px;text-align:center}.weekgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.weekday{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 8px;min-height:155px;min-width:0}.weekday.today{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}.weekdayhead{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:9px}.weekdayname{font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:800}.weekdaynum{font-size:16px;font-weight:850}.day-shift{border-radius:9px;background:var(--blue-soft);padding:7px;margin:6px 0;overflow:hidden}.day-shift b{display:block;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--blue)}.day-shift span{font-size:9px;color:var(--muted);display:block;margin-top:3px}.day-add{border:1px dashed var(--line);background:transparent;color:var(--blue);border-radius:8px;width:100%;padding:6px 3px;font-size:10px;font-weight:750;margin-top:5px}.weekempty{font-size:10px;color:var(--muted);padding:7px 0;min-height:28px}
 @media(max-width:900px){.weekgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:680px){.weekgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.weekday{min-height:130px}.weekrange{min-width:0;font-size:10px}.weekbar{align-items:flex-start}.weeknav{gap:4px}.weeknav button{padding:7px 8px}}
+
+.recovery-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:100}
+.recovery-card{width:min(100%,430px);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+.recovery-card h2{margin:0 0 7px;font-size:22px}.recovery-card p{color:var(--muted);font-size:13px}.recovery-card .field{margin:14px 0}
 </style></head>
 <body><div class="app">
 <header class="topbar"><div class="brand"><div class="logo">S</div><div>ShiftTrack<small>TIME. MONEY. SATISFACTION.</small></div></div><div class="top-actions"><button class="topbtn" id="langBtn">FR</button><button class="topbtn" id="themeBtn" aria-label="Toggle theme">☾</button><div class="avatar">ST</div></div></header>
@@ -47,6 +51,17 @@
 </div>
 <div class="card"><div class="sectionhead" style="margin-top:0"><h2 data-i="preferences">Preferences</h2></div><div class="field"><label data-i="weeklyTargetSetting">Weekly work target (hours)</label><input type="number" id="weeklyTarget" min="1" max="100" value="40"></div><button class="secondary full" id="saveTarget" style="margin-top:10px" data-i="savePreferences">Save preferences</button><div class="divider"></div><div class="field"><label data-i="dataTools">Your data</label><div class="actions"><button class="secondary" id="backupBtn" data-i="downloadBackup">Download backup</button><button class="secondary" id="restoreBtn" data-i="restoreBackup">Restore backup</button><input id="restoreFile" type="file" accept="application/json,.json" hidden></div><p class="small" id="saveStatus" data-i="saveStatus">Automatic saving is on. Download a backup regularly.</p></div><div class="divider"></div><div class="field"><label data-i="dangerZone">Danger zone</label><button class="danger" id="resetBtn" data-i="resetDemo">Reset demo</button></div><p class="small" data-i="localStorageNote">This prototype stores data only in this browser on this device. Cloud accounts and sync are not connected yet.</p></div></div><div class="sectionhead"><h2 data-i="yourJobs">Your jobs</h2></div><div id="jobList" class="two"></div></section>
 </main></div><nav class="mobilebar" id="mobilebar"></nav></div><div class="toast" id="toast"></div>
+<div class="recovery-overlay" id="recoveryOverlay" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
+ <div class="recovery-card"><h2 id="recoveryTitle">Set a new password</h2><p id="recoveryDescription">Choose a new password for your ShiftTrack account.</p>
+  <div id="recoveryForm">
+   <div class="field"><label for="recoveryPassword">New password</label><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></div>
+   <div class="field"><label for="recoveryPasswordConfirm">Confirm new password</label><input id="recoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Enter the password again"></div>
+   <div class="actions"><button class="primary" id="saveNewPassword">Save new password</button></div>
+  </div>
+  <div class="small" id="recoveryMessage" role="status" aria-live="polite"></div>
+  <div class="actions" id="recoveryDoneActions" style="display:none"><button class="primary" id="finishRecovery">Continue to ShiftTrack</button></div>
+ </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const $=id=>document.getElementById(id),today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`},uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36),escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -153,7 +168,32 @@ async function completeFirstSync(choice,cloudRow){
 }
 async function handleCloudSession(session){
   cloudSession=session;cloudSyncReady=false;
-  if(!session){setCloudPanels(false);$('cloudMigrationPanel').style.display='none';cloudMessage('Signed out. Your data remains saved on this device.','gray');return;}
+  if(!session){
+function showRecoveryForm(){
+  $('recoveryPassword').value='';$('recoveryPasswordConfirm').value='';$('recoveryMessage').textContent='';
+  $('recoveryForm').style.display='block';$('recoveryDoneActions').style.display='none';
+  $('recoveryTitle').textContent='Set a new password';$('recoveryDescription').textContent='Choose a new password for your ShiftTrack account.';
+  $('recoveryOverlay').style.display='flex';setTimeout(()=>$('recoveryPassword').focus(),50);
+}
+$('saveNewPassword').onclick=async()=>{
+  const password=$('recoveryPassword').value,confirmPassword=$('recoveryPasswordConfirm').value;
+  if(password.length<8){$('recoveryMessage').textContent='Your password must contain at least 8 characters.';return;}
+  if(password!==confirmPassword){$('recoveryMessage').textContent='The passwords do not match.';return;}
+  if(!supabaseClient||!cloudSession){$('recoveryMessage').textContent='Your recovery session is missing or expired. Request a new reset email.';return;}
+  $('saveNewPassword').disabled=true;$('recoveryMessage').textContent='Saving your new password…';
+  try{
+    const {error}=await supabaseClient.auth.updateUser({password});
+    if(error)throw error;
+    $('recoveryForm').style.display='none';$('recoveryTitle').textContent='Password updated';
+    $('recoveryDescription').textContent='Your ShiftTrack password has been changed successfully.';
+    $('recoveryMessage').textContent='You can now continue using ShiftTrack.';$('recoveryDoneActions').style.display='flex';
+    await handleCloudSession(cloudSession);
+  }catch(err){$('recoveryMessage').textContent=err.message||'Could not update your password. Please try again.';}
+  finally{$('saveNewPassword').disabled=false;}
+};
+$('finishRecovery').onclick=()=>{$('recoveryOverlay').style.display='none';go('profile');};
+
+setCloudPanels(false);$('cloudMigrationPanel').style.display='none';cloudMessage('Signed out. Your data remains saved on this device.','gray');return;}
   setCloudPanels(true);$('cloudAccountEmail').textContent=session.user.email||'Signed in';cloudMessage('Checking cloud data before first sync…','gray');
   try{
     const cloudRow=await cloudFetchData(),cloudHas=hasMeaningfulData(cloudRow?.data),localHas=hasMeaningfulData(state);
@@ -172,7 +212,7 @@ async function initCloud(){
   const {data,error}=await supabaseClient.auth.getSession();
   if(error)cloudMessage('Could not check login session: '+error.message,'red');
   await handleCloudSession(data.session);
-  supabaseClient.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleCloudSession(session),0));
+  supabaseClient.auth.onAuthStateChange((event,session)=>setTimeout(()=>{if(event==='PASSWORD_RECOVERY'){cloudSession=session;setCloudPanels(!!session);if(session)$('cloudAccountEmail').textContent=session.user.email||'Signed in';showRecoveryForm();return;}handleCloudSession(session);},0));
 }
 $('cloudSignIn').onclick=async()=>{
   const email=$('cloudEmail').value.trim(),password=$('cloudPassword').value;
@@ -192,7 +232,7 @@ $('cloudSignUp').onclick=async()=>{
 };
 $('cloudResetPassword').onclick=async()=>{
   const email=$('cloudEmail').value.trim();if(!email){cloudMessage('Enter your email first.','amber');return;}
-  const {error}=await supabaseClient.auth.resetPasswordForEmail(email);
+  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:'https://khalilo97.github.io/ShiftTrack/'});
   cloudMessage(error?error.message:'If the account exists, a password reset email has been sent.',error?'red':'green');
 };
 $('cloudSignOut').onclick=async()=>{
