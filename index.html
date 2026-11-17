@@ -166,9 +166,6 @@ async function completeFirstSync(choice,cloudRow){
   $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;
   cloudMessage('Cloud sync is connected and ready.','green');
 }
-async function handleCloudSession(session){
-  cloudSession=session;cloudSyncReady=false;
-  if(!session){
 function showRecoveryForm(){
   $('recoveryPassword').value='';$('recoveryPasswordConfirm').value='';$('recoveryMessage').textContent='';
   $('recoveryForm').style.display='block';$('recoveryDoneActions').style.display='none';
@@ -193,6 +190,10 @@ $('saveNewPassword').onclick=async()=>{
 };
 $('finishRecovery').onclick=()=>{$('recoveryOverlay').style.display='none';go('profile');};
 
+
+async function handleCloudSession(session){
+  cloudSession=session;cloudSyncReady=false;
+  if(!session){
 setCloudPanels(false);$('cloudMigrationPanel').style.display='none';cloudMessage('Signed out. Your data remains saved on this device.','gray');return;}
   setCloudPanels(true);$('cloudAccountEmail').textContent=session.user.email||'Signed in';cloudMessage('Checking cloud data before first sync…','gray');
   try{
@@ -209,10 +210,19 @@ setCloudPanels(false);$('cloudMigrationPanel').style.display='none';cloudMessage
 async function initCloud(){
   if(!window.supabase?.createClient){cloudMessage('Supabase library did not load. Check your internet connection.','red');return;}
   supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+  let recoveryEventSeen=false;
+  supabaseClient.auth.onAuthStateChange((event,session)=>setTimeout(()=>{
+    if(event==='PASSWORD_RECOVERY'){
+      recoveryEventSeen=true;cloudSession=session;cloudSyncReady=false;setCloudPanels(!!session);
+      if(session)$('cloudAccountEmail').textContent=session.user.email||'Signed in';
+      showRecoveryForm();return;
+    }
+    if(event==='SIGNED_OUT'||event==='SIGNED_IN'||event==='TOKEN_REFRESHED')handleCloudSession(session);
+  },0));
+  const recoveryInUrl=window.location.hash.includes('type=recovery')||new URLSearchParams(window.location.search).get('type')==='recovery';
   const {data,error}=await supabaseClient.auth.getSession();
   if(error)cloudMessage('Could not check login session: '+error.message,'red');
-  await handleCloudSession(data.session);
-  supabaseClient.auth.onAuthStateChange((event,session)=>setTimeout(()=>{if(event==='PASSWORD_RECOVERY'){cloudSession=session;setCloudPanels(!!session);if(session)$('cloudAccountEmail').textContent=session.user.email||'Signed in';showRecoveryForm();return;}handleCloudSession(session);},0));
+  if(!recoveryInUrl&&!recoveryEventSeen)await handleCloudSession(data.session);
 }
 $('cloudSignIn').onclick=async()=>{
   const email=$('cloudEmail').value.trim(),password=$('cloudPassword').value;
