@@ -1,4 +1,4 @@
- <!doctype html>
+  <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f6f8fc"><title>ShiftTrack — Time. Money. Satisfaction.</title>
@@ -131,6 +131,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_KwiHLmnYLG93vJGbHjXBew_WlTzD5NL
 let supabaseClient = null, cloudSession = null, cloudSyncReady = false;
 let cloudSyncTimer = null, cloudBusy = false, cloudPending = false;
 let cloudSessionChecking = false, cloudReadyUserId = null;
+let cloudPollTimer = null, cloudLastUpdatedAt = null, cloudLocalDirty = false, cloudLocalRevision = 0, applyingRemoteState = false;
 const migrationKeyFor = userId => 'shifttrack.cloudFirstSync.' + userId;
 
 function cloudMessage(message, tone='gray') {
@@ -147,13 +148,55 @@ async function cloudFetchData(){
 async function cloudWriteData(){
   if(!cloudSession||!cloudSyncReady||!supabaseClient)return;
   if(cloudBusy){cloudPending=true;return;} cloudBusy=true;
+  const userId=cloudSession.user.id, revisionAtStart=cloudLocalRevision;
+  const payload=JSON.parse(JSON.stringify(state));
+  const writeTime=new Date().toISOString();
   try{
-    const {error}=await supabaseClient.from('user_app_data').upsert({user_id:cloudSession.user.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-    if(error)throw error; cloudMessage('Cloud sync is up to date. Local backup is still available.','green');
+    const {error}=await supabaseClient.from('user_app_data').upsert({user_id:userId,data:payload,updated_at:writeTime},{onConflict:'user_id'});
+    if(error)throw error;
+    cloudLastUpdatedAt=writeTime;
+    if(cloudLocalRevision===revisionAtStart)cloudLocalDirty=false;
+    cloudMessage('Cloud sync is up to date. Local backup is still available.','green');
   }catch(err){console.error('Cloud save failed:',err);cloudMessage('Cloud sync failed. Your local data is still saved. Check your connection and try Sync now.','red');}
   finally{cloudBusy=false;if(cloudPending){cloudPending=false;scheduleCloudSave();}}
 }
 function scheduleCloudSave(){if(!cloudSession||!cloudSyncReady)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(cloudWriteData,900);}
+function applyRemoteCloudState(row){
+  const incoming=row?.data;
+  if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records))return false;
+  applyingRemoteState=true;
+  try{
+    state={jobs:incoming.jobs,shifts:incoming.shifts,records:incoming.records,active:incoming.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
+    const serialized=JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY,serialized);
+    localStorage.setItem('shifttrack.lastGood',serialized);
+    localStorage.setItem('shifttrack.lastSavedAt',new Date().toISOString());
+    cloudLastUpdatedAt=row.updated_at||cloudLastUpdatedAt;
+    cloudLocalDirty=false;
+    render();
+    return true;
+  }catch(err){console.error('Could not apply cloud update locally:',err);cloudMessage('Cloud has newer data, but this device could not save it locally.','red');return false;}
+  finally{applyingRemoteState=false;}
+}
+async function pullCloudUpdates(){
+  if(!cloudSession||!cloudSyncReady||!supabaseClient||cloudBusy)return;
+  try{
+    const row=await cloudFetchData();
+    if(!row)return;
+    if(!cloudLastUpdatedAt){cloudLastUpdatedAt=row.updated_at||null;return;}
+    if(row.updated_at&&row.updated_at>cloudLastUpdatedAt){
+      if(cloudLocalDirty){cloudMessage('A cloud update is available, but this device has unsynced changes. Syncing this device first.','amber');scheduleCloudSave();return;}
+      applyRemoteCloudState(row);
+      cloudMessage('Latest cloud changes received.','green');
+    }
+  }catch(err){console.error('Cloud refresh failed:',err);}
+}
+function startCloudPolling(){
+  if(cloudPollTimer)clearInterval(cloudPollTimer);
+  cloudPollTimer=setInterval(pullCloudUpdates,5000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloudUpdates()});
+  window.addEventListener('focus',pullCloudUpdates);
+}
 async function completeFirstSync(choice,cloudRow){
   if(choice==='cloud'){
     const incoming=cloudRow?.data;
@@ -168,6 +211,7 @@ async function completeFirstSync(choice,cloudRow){
   try{localStorage.setItem(migrationKeyFor(cloudSession.user.id),'complete');}
   catch(storageError){cloudMessage('First sync completed, but this browser could not save the setup marker. Keep your backup.','amber');return;}
   $('cloudMigrationPanel').style.display='none';cloudSyncReady=true;cloudReadyUserId=cloudSession.user.id;
+  const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||new Date().toISOString();cloudLocalDirty=false;startCloudPolling();
   cloudMessage('Cloud sync is connected and ready.','green');
 }
 function showRecoveryForm(){
@@ -197,7 +241,7 @@ $('finishRecovery').onclick=()=>{$('recoveryOverlay').style.display='none';go('p
 
 async function handleCloudSession(session){
   if(!session){
-    cloudSession=null;cloudSyncReady=false;cloudReadyUserId=null;
+    cloudSession=null;cloudSyncReady=false;cloudReadyUserId=null;cloudLastUpdatedAt=null;cloudLocalDirty=false;if(cloudPollTimer){clearInterval(cloudPollTimer);cloudPollTimer=null;}
     setCloudPanels(false);$('cloudMigrationPanel').style.display='none';
     cloudMessage('Signed out. Your data remains saved on this device.','gray');return;
   }
@@ -211,6 +255,7 @@ async function handleCloudSession(session){
     if(localStorage.getItem(migrationKeyFor(userId))==='complete'){
       $('cloudMigrationPanel').style.display='none';
       cloudSyncReady=true;cloudReadyUserId=userId;
+      const latest=await cloudFetchData();cloudLastUpdatedAt=latest?.updated_at||null;cloudLocalDirty=false;startCloudPolling();
       cloudMessage('Cloud sync is connected and ready.','green');
       return;
     }
@@ -272,7 +317,7 @@ $('cloudSignOut').onclick=async()=>{
   if(!confirm('Log out of ShiftTrack Cloud? Local data will remain on this device.'))return;
   const {error}=await supabaseClient.auth.signOut();if(error)cloudMessage(error.message,'red');
 };
-$('cloudSyncNow').onclick=async()=>{cloudMessage('Syncing…');await cloudWriteData();};
+$('cloudSyncNow').onclick=async()=>{cloudMessage('Checking for updates…');if(cloudLocalDirty)await cloudWriteData();else{await pullCloudUpdates();if(!cloudLocalDirty)cloudMessage('Cloud sync is up to date. Local backup is still available.','green');}};
 setCloudPanels(false);
 
 $('langBtn').onclick=()=>{lang=lang==='en'?'fr':'en';localStorage.setItem('shifttrack.lang',lang);applyLanguage()};$('themeBtn').onclick=()=>{theme=theme==='dark'?'light':'dark';applyTheme()};$('shiftDate').value=today();navItems();applyTheme();applyLanguage();function tick(){if(state.active){let ms=Date.now()-new Date(state.active.clockIn).getTime();let paused=(state.active.breaks||[]).filter(b=>!b.paid).reduce((s,b)=>s+(b.end?new Date(b.end)-new Date(b.start):Date.now()-new Date(b.start)),0);let sec=Math.max(0,Math.floor((ms-paused)/1000));$('liveTimer').textContent=[Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,'0')).join(':')}else $('liveTimer').textContent='00:00:00'}tick();initCloud();setInterval(tick,1000);setInterval(()=>{if(state.active)render()},15000);
