@@ -266,7 +266,7 @@ function render(){
  let upcoming=state.shifts.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).slice(0,4);$('homeUpcoming').innerHTML=upcoming.length?upcoming.map(shiftRow).join(''):`<div class="empty">${t('noUpcoming')}</div>`;$('homeJobCards').innerHTML=activeJobs().length?activeJobs().map(j=>`<div class="card jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · ${t('frequency')}: ${escapeHtml(j.frequency)}</div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
  renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
  let total=state.records.reduce((s,r)=>s+workedMinutes(r),0),breaks=state.records.reduce((s,r)=>s+(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((x,b)=>x+duration(b.start,b.end),0),0);$('totalRecorded').textContent=minsFmt(total);$('recordCount').textContent=state.records.length;$('breakTotal').textContent=minsFmt(breaks);
- $('timeRows').innerHTML=state.records.length?state.records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">${t('noRecords')}</td></tr>`;
+ $('timeRows').innerHTML=state.records.length?mergeTimeRecords(state.records).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">${t('noRecords')}</td></tr>`;
  let month=monthRecords();$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
  let by={};state.records.forEach(r=>{let j=job(r.jobId),key=r.jobId;by[key]??={name:j?.employer||'—',currency:r.currency||j?.currency||'CAD',gross:0,mins:0};by[key].gross+=recordGross(r);by[key].mins+=workedMinutes(r)});$('earningsByJob').innerHTML=Object.values(by).length?Object.values(by).map(x=>`<div class="rowitem"><div><div class="rowtitle">${escapeHtml(x.name)}</div><div class="rowmeta">${minsFmt(x.mins)} ${t('hours')}</div></div><div class="rowright">${money(x.gross,x.currency)}</div></div>`).join(''):`<div class="empty">${t('noEarnings')}</div>`;
  $('jobLimit').textContent=`${activeJobs().length} / 3 ${t('active')}`;$('weeklyTarget').value=state.settings.weeklyTarget;
@@ -352,6 +352,21 @@ function cloudMessage(message,tone='gray'){
  if(badge){badge.textContent=tone==='green'?'Connected':tone==='amber'?'Action needed':tone==='red'?'Error':'Not connected';badge.className='pill '+(tone==='green'?'green':'gray')}
 }
 function hasMeaningfulData(s){return !!(s&&((s.jobs||[]).length||(s.shifts||[]).length||(s.records||[]).length||s.active))}
+// Merge completed shifts by stable ID so one device cannot erase another device's history.
+function mergeTimeRecords(...lists){
+ const merged=new Map();
+ for(const list of lists){
+  for(const item of (Array.isArray(list)?list:[])){
+   if(!item||typeof item!=='object')continue;
+   const key=item.id||[item.jobId,item.clockIn,item.date].join('|');
+   const previous=merged.get(key);
+   if(!previous){merged.set(key,{...item,breaks:Array.isArray(item.breaks)?item.breaks.map(b=>({...b})):[]});continue}
+   const preferred=(item.clockOut&&!previous.clockOut)?item:previous;
+   merged.set(key,{...previous,...item,...preferred,breaks:(preferred.breaks||item.breaks||previous.breaks||[]).map(b=>({...b}))});
+  }
+ }
+ return [...merged.values()].sort((a,b)=>new Date(b.clockIn||b.date)-new Date(a.clockIn||a.date));
+}
 function setCloudPanels(signedIn){$('cloudAuthPanel').style.display=signedIn?'none':'block';$('cloudAccountPanel').style.display=signedIn?'block':'none'}
 async function cloudFetchData(){
  const {data,error}=await supabaseClient.from('user_app_data').select('data,updated_at').eq('user_id',cloudSession.user.id).maybeSingle();
@@ -365,9 +380,18 @@ async function cloudWriteData(){
  const userId=cloudSession.user.id,revisionAtStart=cloudLocalRevision;
  cloudLocalDirty=true;
  try{localStorage.setItem(pendingKeyFor(userId),'pending')}catch(storageError){}
- const payload=JSON.parse(JSON.stringify(state));
  const writeTime=new Date().toISOString();
  try{
+  // Read the latest cloud snapshot first, then merge histories before writing.
+  const latest=await cloudFetchData();
+  if(latest?.data&&Array.isArray(latest.data.records)){
+   state.records=mergeTimeRecords(state.records,latest.data.records);
+   const mergedLocal=JSON.stringify(state);
+   localStorage.setItem(STORAGE_KEY,mergedLocal);
+   localStorage.setItem('shifttrack.lastGood',mergedLocal);
+   render();
+  }
+  const payload=JSON.parse(JSON.stringify(state));
   const {error}=await supabaseClient.from('user_app_data').upsert({user_id:userId,data:payload,updated_at:writeTime},{onConflict:'user_id'});
   if(error)throw error;
   cloudLastUpdatedAt=writeTime;
@@ -395,7 +419,7 @@ function applyRemoteCloudState(row){
  if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records))return false;
  applyingRemoteState=true;
  try{
-  state={jobs:incoming.jobs,shifts:incoming.shifts,records:incoming.records,active:incoming.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
   const serialized=JSON.stringify(state);
   localStorage.setItem(STORAGE_KEY,serialized);
   localStorage.setItem('shifttrack.lastGood',serialized);
@@ -431,10 +455,11 @@ async function completeFirstSync(choice,cloudRow){
  if(choice==='cloud'){
   const incoming=cloudRow?.data;
   if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records)){cloudMessage('Cloud data could not be validated. Device data was not changed.','red');return}
-  state={jobs:incoming.jobs,shifts:incoming.shifts,records:incoming.records,active:incoming.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})}};
   if(!save()){cloudMessage('Could not save cloud data locally. Your device data may need a backup.','red');return}
   render();
  }else{
+  if(cloudRow?.data?.records)state.records=mergeTimeRecords(state.records,cloudRow.data.records);
   const {error}=await supabaseClient.from('user_app_data').upsert({user_id:cloudSession.user.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
   if(error){cloudMessage('Could not upload device data. Nothing was removed. '+error.message,'red');return}
  }
