@@ -157,7 +157,7 @@ button{cursor:pointer}
 <div class="heading"><div><div class="eyebrow" data-i="actualRecords">ACTUAL RECORDS</div><h1 data-i="timeTitle">Time clock & timesheets</h1><p class="sub" data-i="timeSub">Actual punches are kept separate from planned shifts.</p></div></div>
 <div class="grid"><div class="card"><div class="metric-label" data-i="totalHours">Total recorded hours</div><div class="metric" id="totalRecorded">0h 00m</div></div><div class="card"><div class="metric-label" data-i="completedShifts">Completed shifts</div><div class="metric" id="recordCount">0</div></div><div class="card"><div class="metric-label" data-i="unpaidBreaks">Unpaid breaks</div><div class="metric" id="breakTotal">0h 00m</div></div><div class="card"><div class="metric-label" data-i="activeClock">Clock status</div><div class="metric" id="timeStatus" style="font-size:17px">Not clocked in</div></div></div>
 <div class="sectionhead"><h2 data-i="history">Time history</h2><button class="secondary" id="exportCsv" data-i="exportCsv">Export CSV</button></div>
-<div class="card tablewrap"><table class="table"><thead><tr><th data-i="date">Date</th><th data-i="job">Job</th><th data-i="clockIn">Clock in</th><th data-i="clockOut">Clock out</th><th data-i="worked">Worked</th><th data-i="gross">Gross estimate</th></tr></thead><tbody id="timeRows"></tbody></table></div>
+<div class="card tablewrap"><table class="table"><thead><tr><th data-i="date">Date</th><th data-i="job">Job</th><th data-i="clockIn">Clock in</th><th data-i="clockOut">Clock out</th><th data-i="worked">Worked</th><th data-i="gross">Gross estimate</th><th>Action</th></tr></thead><tbody id="timeRows"></tbody></table></div>
 <p class="small" data-i="timeNote">Keep your own records. This prototype is not an official employer timesheet.</p>
 </section>
 <section class="page" id="money">
@@ -222,6 +222,7 @@ const normalizePayroll=p=>({jobs:p&&p.jobs&&typeof p.jobs==='object'&&!Array.isA
 const emptyState=()=>({jobs:[],shifts:[],records:[],active:null,settings:{weeklyTarget:40},payroll:emptyPayroll()});
 function loadSavedState(){try{const current=JSON.parse(localStorage.getItem('shifttrack.v2')||'null');if(current&&Array.isArray(current.jobs)&&Array.isArray(current.shifts)&&Array.isArray(current.records))return current}catch(e){}try{const backup=JSON.parse(localStorage.getItem('shifttrack.lastGood')||'null');if(backup&&Array.isArray(backup.jobs)&&Array.isArray(backup.shifts)&&Array.isArray(backup.records))return backup}catch(e){}return emptyState()}
 let state=loadSavedState();
+state.deletedRecordIds=Array.isArray(state.deletedRecordIds)?state.deletedRecordIds:[];
 state.payroll=normalizePayroll(state.payroll);
 let scheduleWeekOffset=0;
 const t=k=>translations[lang][k]||translations.en[k]||k;
@@ -300,7 +301,7 @@ function renderForecastPage(){
  $('forecastCombinedNet').textContent=hasNet?fmtTotals('net'):'Set per-job rates';
  const next=items.map(x=>x.p.payday).filter(Boolean).sort()[0];$('forecastNextPayday').textContent=next?dateFmt(next,{month:'short',day:'numeric',year:'numeric'}):'—';
  $('forecastJobCards').innerHTML=items.length?items.map(({j,e,p})=>{const deductions=e.gross*p.deductionPercent/100,netPay=e.gross-deductions;return `<div class="card forecast-job"><div class="forecast-job-head"><div><b>${escapeHtml(j.employer)}</b><div class="small">${escapeHtml(j.title||'')} · ${escapeHtml(p.frequency)} · ${dateFmt(p.periodStart,{month:'short',day:'numeric'})} – ${dateFmt(p.periodEnd,{month:'short',day:'numeric',year:'numeric'})}</div><div class="small">Expected payday: ${dateFmt(p.payday,{month:'long',day:'numeric',year:'numeric'})}</div></div><span class="pill">${escapeHtml(p.jurisdiction)}</span></div><div class="forecast-breakdown"><div><span class="small">Gross</span><b>${money(e.gross,j.currency)}</b></div><div><span class="small">Manual deductions · ${p.deductionPercent.toFixed(1)}%</span><b>${money(deductions,j.currency)}</b></div><div><span class="small">Manual net estimate</span><b>${money(netPay,j.currency)}</b></div></div><div class="small" style="margin-top:10px">${e.regularHours.toFixed(2)} regular hours + ${e.calculatedOvertime.toFixed(2)} overtime hours at ${money(j.rate,j.currency)}/hr</div></div>`}).join(''):'<div class="card empty">No saved payroll profiles yet. Open Profile → Paycheck forecast setup to configure your jobs.</div>' ;
- const history=state.payroll.forecastHistory.slice().reverse().slice(0,50);$('forecastHistoryList').innerHTML=history.length?history.map(h=>`<div class="payroll-forecast-row"><div><b>${escapeHtml(job(h.jobId)?.employer||'Job')}</b><div class="small">${escapeHtml(h.periodStart||'')} → ${escapeHtml(h.periodEnd||'')} · payday ${escapeHtml(h.payday||'')}</div><div class="small">Saved ${new Date(h.createdAt).toLocaleString(lang==='fr'?'fr-CA':'en-CA')}</div></div><div class="rowright">${money(h.gross,h.currency||'CAD')}<div class="small">gross forecast</div></div></div>`).join(''):'<div class="empty">Saved forecasts will appear here after you save a payroll profile.</div>';
+ const history=state.payroll.forecastHistory.slice().reverse().slice(0,50);$('forecastHistoryList').innerHTML=history.length?history.map(h=>`<div class="payroll-forecast-row"><div><b>${escapeHtml(job(h.jobId)?.employer||'Job')}</b><div class="small">${escapeHtml(h.periodStart||'')} → ${escapeHtml(h.periodEnd||'')} · payday ${escapeHtml(h.payday||'')}</div><div class="small">Saved ${new Date(h.createdAt).toLocaleString(lang==='fr'?'fr-CA':'en-CA')}</div></div><div class="rowright">${money(h.gross,h.currency||'CAD')}<div class="small">gross forecast</div><button class="danger" data-delete-forecast="${escapeHtml(h.id||'')}">Delete</button></div></div>`).join(''):'<div class="empty">Saved forecasts will appear here after you save a payroll profile.</div>';
 }
 function navItems(){let items=[['home','⌂','navHome'],['schedule','▦','navSchedule'],['time','◷','navTime'],['money','＄','navMoney'],['forecast','▤','navForecast'],['profile','⚙','navProfile']];$('sidebar').innerHTML=items.map(([id,ic,k])=>`<button class="nav ${id==='home'?'active':''}" data-tab="${id}"><span class="ico">${ic}</span>${t(k)}</button>`).join('')+`<div class="sidebox"><b>ShiftTrack</b><br>${lang==='fr'?'Espace personnel de travail.':'Your personal work assistant.'}<br><br>${lang==='fr'?'Les données restent sur cet appareil dans cette démo.':'Data stays on this device in this demo.'}</div>`;$('mobilebar').innerHTML=items.map(([id,ic,k])=>`<button class="${id==='home'?'active':''}" data-tab="${id}"><span>${ic}</span>${t(k)}</button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>go(b.dataset.tab));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>go(b.dataset.goto))}
 function go(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));window.scrollTo({top:0,behavior:'smooth'});render()}
@@ -317,7 +318,7 @@ function render(){
  let upcoming=state.shifts.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).slice(0,4);$('homeUpcoming').innerHTML=upcoming.length?upcoming.map(shiftRow).join(''):`<div class="empty">${t('noUpcoming')}</div>`;$('homeJobCards').innerHTML=activeJobs().length?activeJobs().map(j=>`<div class="card jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · ${t('frequency')}: ${escapeHtml(j.frequency)}</div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
  renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
  let total=state.records.reduce((s,r)=>s+workedMinutes(r),0),breaks=state.records.reduce((s,r)=>s+(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((x,b)=>x+duration(b.start,b.end),0),0);$('totalRecorded').textContent=minsFmt(total);$('recordCount').textContent=state.records.length;$('breakTotal').textContent=minsFmt(breaks);
- $('timeRows').innerHTML=state.records.length?mergeTimeRecords(state.records).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">${t('noRecords')}</td></tr>`;
+ $('timeRows').innerHTML=state.records.length?mergeTimeRecords(state.records).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td><td><button class="danger" data-delete-time="${escapeHtml(r.id||'')}">Delete</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">${t('noRecords')}</td></tr>`;
  let month=monthRecords();$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
  let by={};state.records.forEach(r=>{let j=job(r.jobId),key=r.jobId;by[key]??={name:j?.employer||'—',currency:r.currency||j?.currency||'CAD',gross:0,mins:0};by[key].gross+=recordGross(r);by[key].mins+=workedMinutes(r)});$('earningsByJob').innerHTML=Object.values(by).length?Object.values(by).map(x=>`<div class="rowitem"><div><div class="rowtitle">${escapeHtml(x.name)}</div><div class="rowmeta">${minsFmt(x.mins)} ${t('hours')}</div></div><div class="rowright">${money(x.gross,x.currency)}</div></div>`).join(''):`<div class="empty">${t('noEarnings')}</div>`;
  $('jobLimit').textContent=`${activeJobs().length} / 3 ${t('active')}`;$('weeklyTarget').value=state.settings.weeklyTarget;
@@ -378,7 +379,7 @@ $('saveTarget').onclick=()=>{state.settings.weeklyTarget=Math.min(100,Math.max(1
 $('exportCsv').onclick=()=>{let rows=[['Date','Job','Clock in','Clock out','Worked minutes','Gross estimate'],...state.records.map(r=>[r.date,job(r.jobId)?.employer||'',r.clockIn,r.clockOut,workedMinutes(r),recordGross(r)])];download('shifttrack-timesheets.csv',rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
 $('backupBtn').onclick=()=>{const backup={app:'ShiftTrack',schemaVersion:1,exportedAt:new Date().toISOString(),data:state};download('shifttrack-backup-'+today()+'.json',JSON.stringify(backup,null,2),'application/json');toast(lang==='fr'?'Sauvegarde téléchargée. Conservez-la en lieu sûr.':'Backup downloaded. Keep it somewhere safe.')};
 $('restoreBtn').onclick=()=>$('restoreFile').click();
-$('restoreFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());const candidate=parsed?.app==='ShiftTrack'?parsed.data:parsed;if(!candidate||!Array.isArray(candidate.jobs)||!Array.isArray(candidate.shifts)||!Array.isArray(candidate.records)||!candidate.settings||typeof candidate.settings!=='object')throw new Error('Invalid backup');if(!confirm(lang==='fr'?'Restaurer cette sauvegarde remplacera les données actuellement dans cette application. Continuer?':'Restoring this backup will replace the data currently in this app. Continue?'))return;state={jobs:candidate.jobs,shifts:candidate.shifts,records:candidate.records,active:candidate.active||null,settings:{weeklyTarget:Number(candidate.settings.weeklyTarget)||40,...candidate.settings},payroll:normalizePayroll(candidate.payroll)};if(!save())throw new Error('Could not save restored data');render();toast(lang==='fr'?'Sauvegarde restaurée.':'Backup restored.')}catch(err){toast(lang==='fr'?'Fichier de sauvegarde invalide ou impossible à lire.':'Backup file is invalid or could not be read.')}finally{e.target.value=''}};
+$('restoreFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());const candidate=parsed?.app==='ShiftTrack'?parsed.data:parsed;if(!candidate||!Array.isArray(candidate.jobs)||!Array.isArray(candidate.shifts)||!Array.isArray(candidate.records)||!candidate.settings||typeof candidate.settings!=='object')throw new Error('Invalid backup');if(!confirm(lang==='fr'?'Restaurer cette sauvegarde remplacera les données actuellement dans cette application. Continuer?':'Restoring this backup will replace the data currently in this app. Continue?'))return;state={jobs:candidate.jobs,shifts:candidate.shifts,records:candidate.records,deletedRecordIds:Array.isArray(candidate.deletedRecordIds)?candidate.deletedRecordIds:[],active:candidate.active||null,settings:{weeklyTarget:Number(candidate.settings.weeklyTarget)||40,...candidate.settings},payroll:normalizePayroll(candidate.payroll)};if(!save())throw new Error('Could not save restored data');render();toast(lang==='fr'?'Sauvegarde restaurée.':'Backup restored.')}catch(err){toast(lang==='fr'?'Fichier de sauvegarde invalide ou impossible à lire.':'Backup file is invalid or could not be read.')}finally{e.target.value=''}};
 $('resetBtn').onclick=()=>{if(confirm(t('confirmReset'))){localStorage.removeItem(STORAGE_KEY);localStorage.removeItem('shifttrack.lastGood');localStorage.removeItem('shifttrack.lastSavedAt');location.reload()}};
 function download(name,content,type){let a=document.createElement('a'),u=URL.createObjectURL(new Blob([content],{type}));a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 if(navigator.storage?.persist){navigator.storage.persist().then(granted=>{const status=$('saveStatus');if(status&&granted)status.textContent=lang==='fr'?'Stockage persistant accordé. Téléchargez quand même des sauvegardes.':'Persistent browser storage granted. Still download backups regularly.'}).catch(()=>{})}
@@ -393,6 +394,24 @@ let cloudPollTimer=null,cloudLastUpdatedAt=null,cloudLocalDirty=false,cloudLocal
 const migrationKeyFor=userId=>'shifttrack.cloudFirstSync.'+userId;
 const pendingKeyFor=userId=>'shifttrack.cloudPending.'+userId;
 const LAST_CLOUD_USER_KEY='shifttrack.lastCloudUserId';
+
+document.addEventListener('click',e=>{
+ const timeButton=e.target.closest('[data-delete-time]');
+ if(timeButton){
+  const id=timeButton.dataset.deleteTime;
+  if(!id){toast('This record has no stable ID and cannot be safely deleted.');return}
+  if(!confirm('Delete this time record permanently?'))return;
+  state.deletedRecordIds=Array.isArray(state.deletedRecordIds)?state.deletedRecordIds:[];
+  if(!state.deletedRecordIds.includes(id))state.deletedRecordIds.push(id);
+  state.records=state.records.filter(r=>r.id!==id);save();render();toast('Time record deleted.');return;
+ }
+ const forecastButton=e.target.closest('[data-delete-forecast]');
+ if(forecastButton){
+  const id=forecastButton.dataset.deleteForecast;
+  if(!confirm('Delete this saved forecast?'))return;
+  state.payroll.forecastHistory=state.payroll.forecastHistory.filter(h=>h.id!==id);save();render();toast('Forecast history item deleted.');
+ }
+});
 
 function markLocalChangePending(){
  const userId=cloudSession?.user?.id||localStorage.getItem(LAST_CLOUD_USER_KEY);
@@ -409,9 +428,10 @@ function hasMeaningfulData(s){return !!(s&&((s.jobs||[]).length||(s.shifts||[]).
 // Merge completed shifts by stable ID so one device cannot erase another device's history.
 function mergeTimeRecords(...lists){
  const merged=new Map();
+ const deleted=new Set(state?.deletedRecordIds||[]);
  for(const list of lists){
   for(const item of (Array.isArray(list)?list:[])){
-   if(!item||typeof item!=='object')continue;
+   if(!item||typeof item!=='object'||(item.id&&deleted.has(item.id)))continue;
    const key=item.id||[item.jobId,item.clockIn,item.date].join('|');
    const previous=merged.get(key);
    if(!previous){merged.set(key,{...item,breaks:Array.isArray(item.breaks)?item.breaks.map(b=>({...b})):[]});continue}
@@ -473,7 +493,7 @@ function applyRemoteCloudState(row){
  if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records))return false;
  applyingRemoteState=true;
  try{
-  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})},payroll:normalizePayroll(incoming.payroll)};
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),deletedRecordIds:[...new Set([...(state.deletedRecordIds||[]),...(incoming.deletedRecordIds||[])])],active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})},payroll:normalizePayroll(incoming.payroll)};
   const serialized=JSON.stringify(state);
   localStorage.setItem(STORAGE_KEY,serialized);
   localStorage.setItem('shifttrack.lastGood',serialized);
@@ -509,7 +529,7 @@ async function completeFirstSync(choice,cloudRow){
  if(choice==='cloud'){
   const incoming=cloudRow?.data;
   if(!incoming||!Array.isArray(incoming.jobs)||!Array.isArray(incoming.shifts)||!Array.isArray(incoming.records)){cloudMessage('Cloud data could not be validated. Device data was not changed.','red');return}
-  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})},payroll:normalizePayroll(incoming.payroll)};
+  state={jobs:incoming.jobs,shifts:incoming.shifts,records:mergeTimeRecords(state.records,incoming.records),deletedRecordIds:[...new Set([...(state.deletedRecordIds||[]),...(incoming.deletedRecordIds||[])])],active:incoming.active||state.active||null,settings:{weeklyTarget:40,...(incoming.settings||{})},payroll:normalizePayroll(incoming.payroll)};
   if(!save()){cloudMessage('Could not save cloud data locally. Your device data may need a backup.','red');return}
   render();
  }else{
