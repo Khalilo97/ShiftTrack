@@ -95,8 +95,6 @@ This will tell us whether the History display is failing to render the saved rec
 
 
 
-VM123:1 Uncaught TypeError: Cannot read properties of null (reading 'innerHTML')     at <anonymous>:1:36
-	(anonymous)	@	VM123:1
 
 
 
@@ -113,18 +111,9 @@ VM123:1 Uncaught TypeError: Cannot read properties of null (reading 'innerHTML')
 
 
 
-That error means the current page's HTML does not contain an element called timeRows. The code you uploaded does contain it.
 
-Let's check which version is actually running. Paste this into the Console:
-({
-  page: location.href,
-  title: document.title,
-  timeRows: document.querySelectorAll('#timeRows').length,
-  pages: document.querySelectorAll('.page').length
-})
 
 
-Send me the result. This will help identify whether GitHub Pages is serving the updated app.
 
 
 
@@ -135,91 +124,7 @@ Send me the result. This will help identify whether GitHub Pages is serving the 
 
 
 
-  
-
-
-
-
-
-
-1. {page: 'https://khalilo97.github.io/ShiftTrack/?utm_source=chatgpt.com', title: '', timeRows: 0, pages: 0}
-   1. page: "https://khalilo97.github.io/ShiftTrack/?utm_source=chatgpt.com"
-   2. pages: 0
-   3. timeRows: 0
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Your browser is showing a page with zero ShiftTrack app elements. This suggests the problem is now with the page being served or loaded, not the History rendering code.
-
-Paste this into Console:
-({
-  url: location.href,
-  body: document.body?.innerText,
-  htmlLength: document.documentElement.outerHTML.length,
-  readyState: document.readyState
-})
-
-
-Send me the result. Don't change or delete anything yet.
-
-
-
-
-
-
-
-
-
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      ShiftTrack Payslip Tax Breakdown Per Hour
+      ShiftTrack Payslip Reconciled Deductions
 
 
 
@@ -635,9 +540,16 @@ function normalizedPayslipDeductions(record){
 function latestPayslipDeductionRate(jobId){
  const records=state.payslips.filter(r=>r.jobId===jobId&&Number(r.gross)>0&&Number(r.net)>=0&&Number(r.net)<=Number(r.gross)).sort((a,b)=>(b.payDate||'').localeCompare(a.payDate||''));
  if(!records.length)return null;
- const r=records[0],items=normalizedPayslipDeductions(r),itemTotal=items.reduce((a,d)=>a+d.amount,0);
- const total=itemTotal>0?itemTotal:Number(r.gross)-Number(r.net),rate=total/Number(r.gross)*100;
- return {rate,record:r,deductions:items.length?items:[{label:'Other / unitemized deductions',amount:total,rate}]};
+ const r=records[0],gross=Number(r.gross),actualTotal=Math.max(0,gross-Number(r.net)),items=normalizedPayslipDeductions(r),itemTotal=items.reduce((a,d)=>a+d.amount,0);
+ let reconciled=[];
+ if(items.length&&itemTotal<=actualTotal+0.02){
+  reconciled=items.slice();
+  if(actualTotal-itemTotal>0.02)reconciled.push({label:'Other / unitemized deductions',amount:actualTotal-itemTotal,rate:(actualTotal-itemTotal)/gross*100});
+ }else{
+  reconciled=[{label:items.length?'Unverified breakdown — total deductions only':'Other / unitemized deductions',amount:actualTotal,rate:actualTotal/gross*100}];
+ }
+ const rate=actualTotal/gross*100;
+ return {rate,record:r,deductions:reconciled};
 }
 function payslipDeductionEstimate(jobId,gross){
  const latest=latestPayslipDeductionRate(jobId);
@@ -742,7 +654,7 @@ function renderPayslips(){
  $('payslipGrossTotal').textContent=currencies.length?currencies.map(c=>money(totals[c].gross,c)).join(' · '):money(0,'CAD');
  $('payslipNetTotal').textContent=currencies.length?currencies.map(c=>money(totals[c].net,c)).join(' · '):money(0,'CAD');
  $('payslipCount').textContent=records.length;
- $('payslipList').innerHTML=records.length?records.map(r=>{const j=job(r.jobId),employer=j?.employer||r.employerName||'Unknown employer';return `<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${escapeHtml(employer)} · ${r.payDate?dateFmt(r.payDate,{year:'numeric',month:'short',day:'numeric'}):'Pay date not set'}</div><div class="rowmeta">Period: ${r.periodStart||'—'} to ${r.periodEnd||'—'} · ${Number(r.hours||0).toFixed(2)} hours</div><div class="rowmeta">Gross: ${money(r.gross,r.currency)} · Net: ${money(r.net,r.currency)}${r.notes?' · '+escapeHtml(r.notes):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-edit-payslip="${escapeHtml(r.id)}">Edit</button><button type="button" class="danger" data-delete-payslip="${escapeHtml(r.id)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No payslips match these filters.</div>';
+ $('payslipList').innerHTML=records.length?records.map(r=>{const j=job(r.jobId),employer=j?.employer||r.employerName||'Unknown employer';return `<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${escapeHtml(employer)} · ${r.payDate?dateFmt(r.payDate,{year:'numeric',month:'short',day:'numeric'}):'Pay date not set'}</div><div class="rowmeta">Period: ${r.periodStart||'—'} to ${r.periodEnd||'—'} · ${Number(r.hours||0).toFixed(2)} hours</div><div class="rowmeta">Gross: ${money(r.gross,r.currency)} · Net: ${money(r.net,r.currency)} · Total deductions: ${money(Math.max(0,Number(r.gross||0)-Number(r.net||0)),r.currency)}</div><div class="rowmeta">${normalizedPayslipDeductions(r).length?normalizedPayslipDeductions(r).map(d=>`${escapeHtml(d.label)}: ${money(d.amount,r.currency)} (${d.rate.toFixed(2)}%)`).join(' · '):'No itemized deduction lines saved'}${r.notes?' · '+escapeHtml(r.notes):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-edit-payslip="${escapeHtml(r.id)}">Edit</button><button type="button" class="danger" data-delete-payslip="${escapeHtml(r.id)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No payslips match these filters.</div>';
 }
 
 function renderSatisfaction(){
@@ -1024,15 +936,29 @@ $('savePayslip').addEventListener('click',()=>{
  if(periodEnd<periodStart){toast('The pay period end must be on or after its start.');return}
  if(!Number.isFinite(hours)||hours<0||!Number.isFinite(gross)||gross<0||!Number.isFinite(net)||net<0){toast('Enter valid non-negative hours and pay amounts.');return}
  if(net>gross&&!confirm('Net pay is higher than gross pay. Save these values anyway?'))return;
- const deductions=payslipDraftDeductions.map(d=>({label:d.label,amount:Number(d.amount)||0,rate:gross>0?(Number(d.amount)||0)/gross*100:0})).filter(d=>d.amount>=0);
+ let deductions=payslipDraftDeductions.map(d=>({label:d.label,amount:Number(d.amount)||0,rate:gross>0?(Number(d.amount)||0)/gross*100:0})).filter(d=>d.amount>0);
+ const actualDeductions=Math.max(0,gross-net),itemizedTotal=deductions.reduce((sum,d)=>sum+d.amount,0);
+ if(net<=gross){
+  if(itemizedTotal>actualDeductions+0.02){
+   toast(`The detected deduction lines total ${money(itemizedTotal,currency)}, but gross minus net is ${money(actualDeductions,currency)}. Correct the extracted amounts before saving.`);
+   return;
+  }
+  if(actualDeductions-itemizedTotal>0.02){
+   const remainder=actualDeductions-itemizedTotal;
+   deductions.push({label:'Other / unitemized deductions',amount:remainder,rate:gross>0?remainder/gross*100:0});
+  }
+  if(!deductions.length&&actualDeductions>0){
+   deductions=[{label:'Other / unitemized deductions',amount:actualDeductions,rate:gross>0?actualDeductions/gross*100:0}];
+  }
+ }
  state.payslips.push({id:uid(),jobId,employerName:j.employer,payDate,periodStart,periodEnd,hours,gross,net,currency,deductions,notes:$('psNotes').value.trim(),createdAt:new Date().toISOString()});
  payslipDraftDeductions=[];
  save();['psPayDate','psPeriodStart','psPeriodEnd','psHours','psGross','psNet','psNotes'].forEach(id=>$(id).value='');renderPayslips();toast('Payslip record saved.');
 });
 $('exportPayslips').addEventListener('click',()=>{
  if(!getFilteredPayslips().length){toast('There are no matching payslips to export.');return}
- const rows=[['Pay date','Employer','Job title','Period start','Period end','Paid hours','Gross','Net','Currency','Notes']];
- getFilteredPayslips().slice().sort((a,b)=>(a.payDate||'').localeCompare(b.payDate||'')).forEach(r=>{const j=job(r.jobId);rows.push([r.payDate||'',j?.employer||r.employerName||'',j?.title||'',r.periodStart||'',r.periodEnd||'',r.hours??'',r.gross??'',r.net??'',r.currency||'CAD',r.notes||''])});
+ const rows=[['Pay date','Employer','Job title','Period start','Period end','Paid hours','Gross','Net','Total deductions','Deduction breakdown','Currency','Notes']];
+ getFilteredPayslips().slice().sort((a,b)=>(a.payDate||'').localeCompare(b.payDate||'')).forEach(r=>{const j=job(r.jobId);rows.push([r.payDate||'',j?.employer||r.employerName||'',j?.title||'',r.periodStart||'',r.periodEnd||'',r.hours??'',r.gross??'',r.net??'',Math.max(0,Number(r.gross||0)-Number(r.net||0)),normalizedPayslipDeductions(r).map(d=>`${d.label}: ${d.amount.toFixed(2)} (${d.rate.toFixed(2)}%)`).join(' | '),r.currency||'CAD',r.notes||''])});
  const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
  const blob=new Blob(['\\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ShiftTrack-payslips-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 });
