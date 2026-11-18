@@ -1,6 +1,4 @@
 
-
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -189,6 +187,7 @@ button{cursor:pointer}
 
 <section class="page" id="satisfaction">
 <div class="heading"><div><div class="eyebrow">TIME. MONEY. SATISFACTION.</div><h1>Satisfaction</h1><p class="sub">Understand how you feel before and after work, across every job.</p></div></div>
+<div class="card" style="margin-bottom:14px"><div class="grid"><div class="field"><label for="satEmployerFilter">Filter by employer</label><select id="satEmployerFilter"><option value="all">All employers</option></select></div><div class="field"><label for="satDateFilter">Date range</label><select id="satDateFilter"><option value="all">All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></div></div><div class="small" style="margin-top:6px">Both filters update all satisfaction metrics, recent check-ins and CSV export.</div></div>
 <div class="grid">
  <div class="card"><div class="metric-label">Average satisfaction</div><div class="metric" id="satAverage">—</div><div class="small" id="satAverageMeta">Based on saved check-ins</div></div>
  <div class="card"><div class="metric-label">Before shift average</div><div class="metric" id="satBefore">—</div><div class="small">How you felt before work</div></div>
@@ -196,8 +195,12 @@ button{cursor:pointer}
  <div class="card"><div class="metric-label">Shifts with check-ins</div><div class="metric" id="satCoverage">0</div><div class="small" id="satCoverageMeta">Completed shifts</div></div>
 </div>
 <div class="sectionhead"><h2>Before vs. after work</h2></div><div class="card" id="satComparison"><div class="empty">Your comparison will appear after you save check-ins.</div></div>
+<div class="sectionhead"><h2>Shift-by-shift change</h2></div><div class="card rows" id="satShiftChange"><div class="empty">Your paired check-ins will appear here.</div></div>
+<div class="sectionhead"><h2>Biggest rating changes by shift</h2></div><div class="card rows" id="satBiggestChanges"><div class="empty">Paired shift ratings will appear here.</div></div>
+<div class="sectionhead"><h2>Rating distribution</h2></div><div class="card rows" id="satDistribution"><div class="empty">Your rating distribution will appear after you save check-ins.</div></div>
+<div class="sectionhead"><h2>Satisfaction by day of week</h2></div><div class="card rows" id="satByWeekday"><div class="empty">Your weekday patterns will appear after you save check-ins.</div></div>
 <div class="sectionhead"><h2>Satisfaction by employer</h2></div><div class="card rows" id="satByJob"><div class="empty">No satisfaction data yet.</div></div>
-<div class="sectionhead"><h2>Recent check-ins</h2><span class="small">Latest 20</span></div><div class="card rows" id="satRecent"><div class="empty">Your saved check-ins will appear here.</div></div>
+<div class="sectionhead"><h2>Recent check-ins</h2><button class="secondary" id="satExportBtn" type="button">Export satisfaction CSV</button></div><div class="card rows" id="satRecent"><div class="empty">Your saved check-ins will appear here.</div></div>
 <p class="small" style="margin-top:12px">These ratings reflect your own check-ins. They describe patterns, not proof that a job or shift caused a particular feeling. Skipped check-ins are not counted.</p>
 </section>
 <section class="page" id="profile">
@@ -350,8 +353,53 @@ function go(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle
 function applyLanguage(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(el=>{let k=el.dataset.i;if(translations[lang][k])el.textContent=t(k)});$('langBtn').textContent=lang==='en'?'FR':'EN';navItems();render()}
 function applyTheme(){document.documentElement.dataset.theme=theme;$('themeBtn').textContent=theme==='dark'?'☀':'☾';localStorage.setItem('shifttrack.theme',theme)}
 function fillJobSelect(id,includePaused=false){let list=includePaused?state.jobs:activeJobs();$(id).innerHTML=list.length?list.map(j=>`<option value="${j.id}">${escapeHtml(j.employer)} — ${escapeHtml(j.title||'')}</option>`).join(''):`<option value="">${t('addJobFirst')}</option>`}
+
+function exportSatisfactionCsv(){
+ const selected=$('satEmployerFilter')?.value||'all';
+ const range=$('satDateFilter')?.value||'all';
+ const cutoff=range==='all'?null:Date.now()-Number(range)*24*60*60*1000;
+ const rows=[['Date','Employer','Job title','Check-in','Rating out of 5','Note']];
+ state.records.forEach(r=>{
+  if(selected!=='all'&&r.jobId!==selected)return;
+  const recordDate=r.clockOut||r.clockIn||r.date;
+  const timestamp=recordDate?new Date(recordDate).getTime():NaN;
+  if(cutoff!==null&&(!Number.isFinite(timestamp)||timestamp<cutoff))return;
+  const j=job(r.jobId),employer=j?.employer||'Unknown job',title=j?.title||'';
+  [['Before shift',r.satisfactionBefore,r.clockIn||r.date],['After shift',r.satisfactionAfter,r.clockOut||r.date]].forEach(([phase,item,date])=>{
+   if(!item||!Number(item.score))return;
+   rows.push([date?new Date(date).toISOString():'',employer,title,phase,String(item.score),item.note||'']);
+  });
+ });
+ if(rows.length===1){alert('There are no satisfaction check-ins to export yet.');return;}
+ const csv=rows.map(row=>row.map(value=>'"'+String(value??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='ShiftTrack-satisfaction-'+new Date().toISOString().slice(0,10)+'.csv';
+ document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+
 function renderSatisfaction(){
- const records=state.records.slice().sort((a,b)=>(b.clockOut||b.clockIn||'').localeCompare(a.clockOut||a.clockIn||''));
+ const allRecords=state.records.slice().sort((a,b)=>(b.clockOut||b.clockIn||'').localeCompare(a.clockOut||a.clockIn||''));
+ const filterEl=$('satEmployerFilter');
+ const selectedEmployer=filterEl?.value||'all';
+ if(filterEl){
+  const current=selectedEmployer;
+  const jobs=[...new Set(allRecords.map(r=>r.jobId).filter(Boolean))].map(id=>({id,name:job(id)?.employer||'Unknown job'}));
+  filterEl.innerHTML='<option value="all">All employers</option>'+jobs.map(j=>`<option value="${escapeHtml(j.id)}">${escapeHtml(j.name)}</option>`).join('');
+  filterEl.value=jobs.some(j=>j.id===current)?current:'all';
+  filterEl.onchange=()=>renderSatisfaction();
+ }
+ const dateFilter=$('satDateFilter');
+ const selectedRange=dateFilter?.value||'all';
+ const cutoff=selectedRange==='all'?null:Date.now()-Number(selectedRange)*24*60*60*1000;
+ const records=allRecords.filter(r=>{
+  if(filterEl&&filterEl.value!=='all'&&r.jobId!==filterEl.value)return false;
+  if(cutoff===null)return true;
+  const dateValue=r.clockOut||r.clockIn||r.date;
+  const timestamp=dateValue?new Date(dateValue).getTime():NaN;
+  return Number.isFinite(timestamp)&&timestamp>=cutoff;
+ });
+ if(dateFilter)dateFilter.onchange=()=>renderSatisfaction();
  const score=(r,k)=>Number(r?.[k]?.score)||0;
  const before=records.filter(r=>score(r,'satisfactionBefore'));
  const after=records.filter(r=>score(r,'satisfactionAfter'));
@@ -365,12 +413,54 @@ function renderSatisfaction(){
  const delta=bAvg!==null&&aAvg!==null?aAvg-bAvg:null;
  $('satComparison').innerHTML=delta===null?'<div class="empty">Save both a before-shift and after-shift rating to see your comparison.</div>':
  `<div class="rowitem"><div><div class="rowtitle">Before work</div><div class="rowmeta">${before.length} check-ins</div></div><b>${fmt(bAvg)}</b></div><div class="rowitem"><div><div class="rowtitle">After work</div><div class="rowmeta">${after.length} check-ins</div></div><b>${fmt(aAvg)}</b></div><div class="mutedbox" style="margin-top:12px">${delta>0?'Your average rating was higher after work.':delta<0?'Your average rating was lower after work.':'Your average rating was unchanged.'} Difference: ${delta>0?'+':''}${delta.toFixed(1)} points. This is a descriptive comparison, not proof of cause.</div>`;
+
+ const paired=records.filter(r=>Number(r.satisfactionBefore?.score)>0&&Number(r.satisfactionAfter?.score)>0);
+ const changes=paired.map(r=>Number(r.satisfactionAfter.score)-Number(r.satisfactionBefore.score));
+ const improved=changes.filter(n=>n>0).length;
+ const unchanged=changes.filter(n=>n===0).length;
+ const lower=changes.filter(n=>n<0).length;
+ const avgChange=avg(changes);
+ $('satShiftChange').innerHTML=paired.length?`
+  <div class="rowitem"><div><div class="rowtitle">Improved after work</div><div class="rowmeta">After-shift rating was higher</div></div><b>${improved}</b></div>
+  <div class="rowitem"><div><div class="rowtitle">No change</div><div class="rowmeta">Both ratings were equal</div></div><b>${unchanged}</b></div>
+  <div class="rowitem"><div><div class="rowtitle">Lower after work</div><div class="rowmeta">After-shift rating was lower</div></div><b>${lower}</b></div>
+  <div class="mutedbox">Based on ${paired.length} shifts with both ratings. Average change: ${avgChange>0?'+':''}${avgChange.toFixed(1)} points. This describes the ratings; it does not explain why they changed.</div>`:'<div class="empty">No shifts have both a before-shift and after-shift rating yet.</div>';
+
+ const rankedChanges=paired.map(r=>{
+  const beforeScore=Number(r.satisfactionBefore.score),afterScore=Number(r.satisfactionAfter.score);
+  return {r,beforeScore,afterScore,change:afterScore-beforeScore,date:r.clockOut||r.clockIn||r.date,employer:job(r.jobId)?.employer||'Unknown job'};
+ }).sort((a,b)=>Math.abs(b.change)-Math.abs(a.change)).slice(0,10);
+ $('satBiggestChanges').innerHTML=rankedChanges.length?rankedChanges.map(x=>{
+  const sign=x.change>0?'+':'';
+  const label=x.change>0?'Higher after work':x.change<0?'Lower after work':'No change';
+  return `<div class="rowitem"><div style="min-width:0"><div class="rowtitle">${escapeHtml(x.employer)}</div><div class="rowmeta">${x.date?new Date(x.date).toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',{dateStyle:'medium'}):'Date unavailable'} · Before ${x.beforeScore}/5 → After ${x.afterScore}/5</div></div><div class="rowright"><b>${sign}${x.change.toFixed(1)}</b><div class="small">${label}</div></div></div>`;
+ }).join(''):'<div class="empty">No paired shift ratings yet.</div>';
+
+ const distribution=[1,2,3,4,5].map(scoreValue=>({score:scoreValue,count:all.filter(v=>v===scoreValue).length}));
+ const maxDistribution=Math.max(1,...distribution.map(x=>x.count));
+ const ratingWords=lang==='fr'?{1:'Très difficile',2:'Difficile',3:'Correct',4:'Bien',5:'Excellent'}:{1:'Very difficult',2:'Difficult',3:'Okay',4:'Good',5:'Excellent'};
+ $('satDistribution').innerHTML=all.length?distribution.map(x=>`<div class="rowitem"><div style="width:112px"><div class="rowtitle">${x.score}/5 · ${ratingWords[x.score]}</div></div><div style="flex:1;min-width:0"><div class="progress"><span style="width:${x.count/maxDistribution*100}%"></span></div></div><div class="rowright"><b>${x.count}</b></div></div>`).join(''):'<div class="empty">No ratings yet.</div>';
+ const weekdayNames=lang==='fr'?['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+ const weekdayData=Array.from({length:7},()=>[]);
+ records.forEach(r=>{
+  const dateValue=r.clockOut||r.clockIn||r.date;
+  if(!dateValue)return;
+  const day=new Date(dateValue).getDay();
+  if(Number(r.satisfactionBefore?.score))weekdayData[day].push(Number(r.satisfactionBefore.score));
+  if(Number(r.satisfactionAfter?.score))weekdayData[day].push(Number(r.satisfactionAfter.score));
+ });
+ const weekdayRows=weekdayData.map((values,day)=>({day,values,average:avg(values)})).filter(x=>x.values.length);
+ $('satByWeekday').innerHTML=weekdayRows.length?weekdayRows.map(x=>{
+  const width=Math.max(0,Math.min(100,x.average/5*100));
+  return `<div class="rowitem"><div style="flex:1;min-width:0"><div class="rowtitle">${weekdayNames[x.day]}</div><div class="progress" style="margin-top:7px"><span style="width:${width}%"></span></div><div class="rowmeta">${x.values.length} ratings</div></div><div class="rowright"><b>${fmt(x.average)}</b></div></div>`;
+ }).join(''):'<div class="empty">No weekday data yet.</div>';
  const groups={};records.forEach(r=>{const j=job(r.jobId),key=r.jobId||'unknown';groups[key]??={name:j?.employer||'Unknown job',before:[],after:[],count:0};if(r.satisfactionBefore?.score){groups[key].before.push(Number(r.satisfactionBefore.score));groups[key].count++}if(r.satisfactionAfter?.score){groups[key].after.push(Number(r.satisfactionAfter.score));groups[key].count++}});
  const vals=Object.values(groups).filter(g=>g.count);
  $('satByJob').innerHTML=vals.length?vals.map(g=>{const ba=avg(g.before),aa=avg(g.after),ga=avg([...g.before,...g.after]);return `<div class="rowitem"><div><div class="rowtitle">${escapeHtml(g.name)}</div><div class="rowmeta">Before ${fmt(ba)} · After ${fmt(aa)} · ${g.count} ratings</div></div><div class="rowright"><b>${fmt(ga)}</b></div></div>`}).join(''):'<div class="empty">No satisfaction data yet.</div>';
  const recent=[];records.forEach(r=>{const employer=job(r.jobId)?.employer||'Unknown job';if(r.satisfactionBefore)recent.push({phase:'Before shift',entry:r.satisfactionBefore,date:r.clockIn||r.date,employer});if(r.satisfactionAfter)recent.push({phase:'After shift',entry:r.satisfactionAfter,date:r.clockOut||r.date,employer})});
  recent.sort((a,b)=>(b.entry.createdAt||b.date||'').localeCompare(a.entry.createdAt||a.date||''));
  $('satRecent').innerHTML=recent.length?recent.slice(0,20).map(x=>`<div class="rowitem"><div><div class="rowtitle">${x.phase} · ${escapeHtml(x.employer)}</div><div class="rowmeta">${x.date?new Date(x.date).toLocaleString(lang==='fr'?'fr-CA':'en-CA',{dateStyle:'medium',timeStyle:'short'}):'—'}${x.entry.note?' · '+escapeHtml(x.entry.note):''}</div></div><div class="rowright"><b>${Number(x.entry.score)}/5</b></div></div>`).join(''):'<div class="empty">Your saved check-ins will appear here.</div>';
+ $('satExportBtn').onclick=exportSatisfactionCsv;
 }
 
 function render(){
