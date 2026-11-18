@@ -1,4 +1,8 @@
 
+
+
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -156,7 +160,7 @@ button{cursor:pointer}
 <section class="page" id="time">
 <div class="heading"><div><div class="eyebrow" data-i="actualRecords">ACTUAL RECORDS</div><h1 data-i="timeTitle">Time clock & timesheets</h1><p class="sub" data-i="timeSub">Actual punches are kept separate from planned shifts.</p></div></div>
 <div class="grid"><div class="card"><div class="metric-label" data-i="totalHours">Total recorded hours</div><div class="metric" id="totalRecorded">0h 00m</div></div><div class="card"><div class="metric-label" data-i="completedShifts">Completed shifts</div><div class="metric" id="recordCount">0</div></div><div class="card"><div class="metric-label" data-i="unpaidBreaks">Unpaid breaks</div><div class="metric" id="breakTotal">0h 00m</div></div><div class="card"><div class="metric-label" data-i="activeClock">Clock status</div><div class="metric" id="timeStatus" style="font-size:17px">Not clocked in</div></div></div>
-<div class="sectionhead"><h2 data-i="history">Time history</h2><button class="secondary" id="exportCsv" data-i="exportCsv">Export CSV</button></div>
+<div class="sectionhead"><h2 data-i="history">Time history</h2><div class="rowright"><button class="secondary" id="exportCsv" data-i="exportCsv">Export CSV</button><button class="danger" id="deleteAllTime">Delete all</button></div></div>
 <div class="card tablewrap"><table class="table"><thead><tr><th data-i="date">Date</th><th data-i="job">Job</th><th data-i="clockIn">Clock in</th><th data-i="clockOut">Clock out</th><th data-i="worked">Worked</th><th data-i="gross">Gross estimate</th><th>Action</th></tr></thead><tbody id="timeRows"></tbody></table></div>
 <p class="small" data-i="timeNote">Keep your own records. This prototype is not an official employer timesheet.</p>
 </section>
@@ -173,7 +177,7 @@ button{cursor:pointer}
 <div class="forecast-grid"><div class="card"><div class="metric-label">Configured jobs</div><div class="metric" id="forecastJobCount">0</div></div><div class="card"><div class="metric-label">Combined manual net estimate</div><div class="metric" id="forecastCombinedNet">Not set</div></div><div class="card"><div class="metric-label">Next expected payday</div><div class="metric" id="forecastNextPayday">—</div></div></div>
 <div class="sectionhead"><h2>Forecasts by employer</h2><button class="linkbtn" data-goto="profile">Edit payroll settings →</button></div><div id="forecastJobCards"></div>
 <div class="mutedbox">Important: the take-home figure uses the manual deduction percentage you enter for each job. It is not a CRA or Revenu Québec payroll calculation and must not be treated as an official net-pay result. Employers withhold independently; annual tax owing can differ.</div>
-<div class="sectionhead"><h2>Forecast history</h2></div><div class="card forecast-history" id="forecastHistoryList"><div class="empty">Saved forecasts will appear here.</div></div>
+<div class="sectionhead"><h2>Forecast history</h2><button class="danger" id="deleteAllForecast">Delete all</button></div><div class="card forecast-history" id="forecastHistoryList"><div class="empty">Saved forecasts will appear here.</div></div>
 </section>
 <section class="page" id="profile">
 <div class="heading"><div><div class="eyebrow" data-i="personalWorkspace">PERSONAL WORKSPACE</div><h1 data-i="profileTitle">Profile & jobs</h1><p class="sub" data-i="profileSub">Manage your employers, hourly rates and preferences.</p></div></div>
@@ -394,6 +398,23 @@ let cloudPollTimer=null,cloudLastUpdatedAt=null,cloudLocalDirty=false,cloudLocal
 const migrationKeyFor=userId=>'shifttrack.cloudFirstSync.'+userId;
 const pendingKeyFor=userId=>'shifttrack.cloudPending.'+userId;
 const LAST_CLOUD_USER_KEY='shifttrack.lastCloudUserId';
+
+$('deleteAllTime').addEventListener('click',()=>{
+ const records=mergeTimeRecords(state.records);
+ if(!records.length){toast('There are no time records to delete.');return}
+ if(!confirm(`Delete all ${records.length} time records permanently? This cannot be undone.`))return;
+ state.deletedRecordIds=Array.isArray(state.deletedRecordIds)?state.deletedRecordIds:[];
+ const ids=records.map(r=>r.id).filter(Boolean);
+ state.deletedRecordIds=[...new Set([...state.deletedRecordIds,...ids])];
+ state.records=state.records.filter(r=>!ids.includes(r.id));
+ save();render();toast('All time records deleted.');
+});
+$('deleteAllForecast').addEventListener('click',()=>{
+ const count=state.payroll.forecastHistory.length;
+ if(!count){toast('There are no saved forecasts to delete.');return}
+ if(!confirm(`Delete all ${count} saved forecasts permanently? This cannot be undone.`))return;
+ state.payroll.forecastHistory=[];save();render();toast('All forecast history deleted.');
+});
 
 document.addEventListener('click',e=>{
  const timeButton=e.target.closest('[data-delete-time]');
