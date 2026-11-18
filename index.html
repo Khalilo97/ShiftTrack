@@ -122,6 +122,15 @@ button{cursor:pointer}
 .recovery-card h2{margin:0 0 7px;font-size:22px}
 .recovery-card p{color:var(--muted);font-size:13px}
 .recovery-card .field{margin:14px 0}
+.satisfaction-overlay{position:fixed;inset:0;background:rgba(15,23,42,.62);display:none;align-items:center;justify-content:center;padding:18px;z-index:110}
+.satisfaction-card{width:min(100%,460px);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.satisfaction-card h2{margin:0 0 8px;font-size:22px}.satisfaction-card p{color:var(--muted);font-size:14px;line-height:1.5}
+.satisfaction-ratings{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0}
+.satisfaction-ratings button{border:1px solid var(--line);background:var(--panel2,var(--bg));color:var(--text);border-radius:13px;padding:12px 4px;font-size:22px;cursor:pointer}
+.satisfaction-ratings button.selected{border:2px solid var(--blue);background:var(--blue-soft)}
+.satisfaction-ratings small{display:block;font-size:10px;margin-top:5px}
+.satisfaction-card textarea{width:100%;min-height:74px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
+
 </style>
 </head>
 <body>
@@ -215,6 +224,23 @@ button{cursor:pointer}
 <div id="recoveryForm"><div class="field"><label for="recoveryPassword">New password</label><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></div><div class="field"><label for="recoveryPasswordConfirm">Confirm new password</label><input id="recoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Enter the password again"></div><div class="actions"><button class="primary" id="saveNewPassword">Save new password</button></div></div>
 <div class="small" id="recoveryMessage" role="status" aria-live="polite"></div><div class="actions" id="recoveryDoneActions" style="display:none"><button class="primary" id="finishRecovery">Continue to ShiftTrack</button></div>
 </div>
+</div>
+<div class="satisfaction-overlay" id="satisfactionOverlay" role="dialog" aria-modal="true" aria-labelledby="satisfactionTitle">
+ <div class="satisfaction-card">
+  <div class="eyebrow">SHIFTTRACK · SATISFACTION</div>
+  <h2 id="satisfactionTitle">How are you feeling?</h2>
+  <p id="satisfactionDescription">Take a moment to check in with yourself.</p>
+  <div class="satisfaction-ratings" id="satisfactionRatings">
+   <button type="button" data-satisfaction="1">😣<small>1</small></button>
+   <button type="button" data-satisfaction="2">🙁<small>2</small></button>
+   <button type="button" data-satisfaction="3">😐<small>3</small></button>
+   <button type="button" data-satisfaction="4">🙂<small>4</small></button>
+   <button type="button" data-satisfaction="5">😁<small>5</small></button>
+  </div>
+  <div class="small" style="margin-bottom:12px">1 = Very bad · 5 = Very good</div>
+  <textarea id="satisfactionNote" maxlength="500" placeholder="Optional note: what is affecting how you feel?"></textarea>
+  <div class="actions"><button class="primary" id="saveSatisfaction" disabled>Save check-in</button><button class="secondary" id="skipSatisfaction">Skip</button></div>
+ </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -351,7 +377,18 @@ $('currentPlannerWeek').onclick=()=>{scheduleWeekOffset=0;renderWeeklyPlanner()}
 $('weeklyPlanner').onclick=e=>{let a=e.target.closest('[data-add-day]'),r=e.target.closest('[data-remove-shift]');if(a){$('shiftDate').value=a.dataset.addDay;$('shiftLabel').scrollIntoView({behavior:'smooth',block:'center'});$('shiftLabel').focus();return}if(r){state.shifts=state.shifts.filter(x=>x.id!==r.dataset.removeShift);save();render()}};
 $('addShiftBtn').onclick=()=>{let jobId=$('shiftJob').value,date=$('shiftDate').value,start=$('shiftStart').value,end=$('shiftEnd').value;if(!jobId||!date||!start||!end||end===start){toast(t('invalidShift'));return}state.shifts.push({id:uid(),jobId,date,start,end,label:$('shiftLabel').value.trim()||'Work shift',breakMin:Math.max(0,Number($('shiftBreak').value)||0),source:'personal'});save();$('shiftLabel').value='';render();toast(t('shiftAdded'))};
 $('scheduleRows').onclick=e=>{let b=e.target.closest('[data-remove-shift]');if(b){state.shifts=state.shifts.filter(s=>s.id!==b.dataset.removeShift);save();render();toast(t('shiftRemoved'))}};
-$('clockInBtn').onclick=()=>{if(state.active||!job($('clockJob').value))return;let j=job($('clockJob').value);state.active={id:uid(),jobId:j.id,clockIn:new Date().toISOString(),date:today(),rateSnapshot:Number(j.rate),currency:j.currency,breaks:[],breakOpen:false};save();render();toast(t('clockedIn'))};
+let pendingSatisfaction=null,selectedSatisfaction=null;
+function openSatisfactionCheck(phase,recordId){
+ pendingSatisfaction={phase,recordId};selectedSatisfaction=null;$('satisfactionNote').value='';$('saveSatisfaction').disabled=true;
+ $('satisfactionTitle').textContent=phase==='before'?'How are you feeling before your shift?':'How are you feeling after your shift?';
+ $('satisfactionDescription').textContent=phase==='before'?'A quick check-in before work. Your answer is private.':'A quick check-in after work. Your answer is private.';
+ document.querySelectorAll('[data-satisfaction]').forEach(b=>b.classList.remove('selected'));$('satisfactionOverlay').style.display='flex';
+}
+function closeSatisfactionCheck(){ $('satisfactionOverlay').style.display='none';pendingSatisfaction=null;selectedSatisfaction=null; }
+$('satisfactionRatings').onclick=e=>{const b=e.target.closest('[data-satisfaction]');if(!b)return;selectedSatisfaction=Number(b.dataset.satisfaction);document.querySelectorAll('[data-satisfaction]').forEach(x=>x.classList.toggle('selected',x===b));$('saveSatisfaction').disabled=false;};
+$('saveSatisfaction').onclick=()=>{if(!pendingSatisfaction||!selectedSatisfaction)return;const {phase,recordId}=pendingSatisfaction;const entry={score:selectedSatisfaction,note:$('satisfactionNote').value.trim(),createdAt:new Date().toISOString()};if(state.active?.id===recordId){state.active[phase==='before'?'satisfactionBefore':'satisfactionAfter']=entry;}else{const record=state.records.find(r=>r.id===recordId);if(record)record[phase==='before'?'satisfactionBefore':'satisfactionAfter']=entry;}save();closeSatisfactionCheck();toast('Satisfaction check-in saved.');};
+$('skipSatisfaction').onclick=()=>closeSatisfactionCheck();
+$('clockInBtn').onclick=()=>{if(state.active||!job($('clockJob').value))return;let j=job($('clockJob').value);state.active={id:uid(),jobId:j.id,clockIn:new Date().toISOString(),date:today(),rateSnapshot:Number(j.rate),currency:j.currency,breaks:[],breakOpen:false};const recordId=state.active.id;save();render();toast(t('clockedIn'));openSatisfactionCheck('before',recordId)};
 $('breakBtn').onclick=()=>{if(!state.active)return;if(state.active.breakOpen){let b=state.active.breaks[state.active.breaks.length-1];b.end=new Date().toISOString();state.active.breakOpen=false;toast(t('breakEnded'))}else{state.active.breaks.push({start:new Date().toISOString(),end:null,paid:false});state.active.breakOpen=true;toast(t('breakStarted'))}save();render()};
 $('clockOutBtn').onclick=async()=>{
  if(!state.active)return;
@@ -374,6 +411,7 @@ $('clockOutBtn').onclick=async()=>{
  }
  render();
  toast(t('clockedOut'));
+ openSatisfactionCheck('after',completedRecord.id);
  if(cloudSession&&cloudSyncReady&&navigator.onLine){
   clearTimeout(cloudSyncTimer);
   await cloudWriteData();
@@ -703,4 +741,3 @@ tick();initCloud();setInterval(tick,1000);setInterval(()=>{if(state.active)rende
 
 
 
-Draggable item chatgpt-project-conversation:g-p-6af8aa873f8c81918f4d5b0b5ac4adea:6af8aa8c-407c-83ea-ad40-065d1defeaab was dropped.
