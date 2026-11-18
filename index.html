@@ -1,6 +1,5 @@
 
 
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -207,12 +206,17 @@ button{cursor:pointer}
 </div><div class="field"><label for="psNotes">Notes (optional)</label><textarea id="psNotes" rows="2" maxlength="500" placeholder="Overtime, tips, adjustments, etc."></textarea></div>
 <div class="actions"><button class="primary" id="savePayslip">Save payslip record</button></div>
 <p class="small">Enter the figures exactly as shown on your payslip. This version stores a manual record; it does not read or verify uploaded payslip documents.</p></div>
-<div class="sectionhead"><h2>Saved payslips</h2><button class="secondary" id="exportPayslips">Export CSV</button></div>
+<div class="sectionhead"><h2>Saved payslips</h2><div class="actions"><button class="secondary" id="exportPayslips">Export CSV</button><button class="secondary" id="choosePayslipCsv">Import CSV</button><input id="payslipCsvFile" type="file" accept=".csv,text/csv" hidden></div></div>
+<div class="card" id="payslipImportPanel" hidden style="margin-bottom:12px"><div class="sectionhead"><h3>CSV import preview</h3><button class="linkbtn" id="cancelPayslipImport">Cancel</button></div><p class="small" id="payslipImportSummary">Choose a CSV exported from ShiftTrack or a CSV with the supported column names.</p><div class="rows" id="payslipImportPreview"></div><div class="actions" style="margin-top:12px"><button class="primary" id="confirmPayslipImport" disabled>Import valid records</button></div><p class="small">Nothing is saved until you confirm. Existing matching records and invalid rows are skipped.</p></div>
 <div class="card" style="margin-bottom:12px"><div class="grid">
  <div class="field"><label for="psEmployerFilter">Employer</label><select id="psEmployerFilter"><option value="all">All employers</option></select></div>
  <div class="field"><label for="psDateFilter">Pay date range</label><select id="psDateFilter"><option value="all">All time</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option></select></div>
  <div class="field"><label for="psSearch">Search notes / dates</label><input id="psSearch" type="search" placeholder="Search saved payslips"></div>
 </div></div>
+
+<div class="sectionhead"><h2>Payslip vs. forecast</h2><span class="pill">Exact pay-period match</span></div>
+<div class="card rows" id="payslipForecastComparison"><div class="empty">Save a forecast and record a payslip for the same job and pay period to compare them.</div></div>
+
 <div class="card rows" id="payslipList"><div class="empty">No payslip records yet.</div></div>
 </section>
 
@@ -460,6 +464,23 @@ function renderPayslips(){
  $('payslipNetTotal').textContent=currencies.length?currencies.map(c=>money(totals[c].net,c)).join(' · '):money(0,'CAD');
  $('payslipCount').textContent=records.length;
  $('payslipList').innerHTML=records.length?records.map(r=>{const j=job(r.jobId),employer=j?.employer||r.employerName||'Unknown employer';return `<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${escapeHtml(employer)} · ${r.payDate?dateFmt(r.payDate,{year:'numeric',month:'short',day:'numeric'}):'Pay date not set'}</div><div class="rowmeta">Period: ${r.periodStart||'—'} to ${r.periodEnd||'—'} · ${Number(r.hours||0).toFixed(2)} hours</div><div class="rowmeta">Gross: ${money(r.gross,r.currency)} · Net: ${money(r.net,r.currency)}${r.notes?' · '+escapeHtml(r.notes):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-edit-payslip="${escapeHtml(r.id)}">Edit</button><button type="button" class="danger" data-delete-payslip="${escapeHtml(r.id)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No payslips match these filters.</div>';
+ const comparison=$('payslipForecastComparison');
+ if(comparison){
+  const comparisons=records.map(r=>{
+   const matches=state.payroll.forecastHistory.filter(h=>h.jobId===r.jobId&&h.periodStart===r.periodStart&&h.periodEnd===r.periodEnd&&String(h.currency||'CAD').toUpperCase()===String(r.currency||'CAD').toUpperCase()).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+   if(!matches.length)return {r,match:null};
+   return {r,match:matches[0],multiple:matches.length>1};
+  });
+  comparison.innerHTML=comparisons.length?comparisons.map(({r,match,multiple})=>{
+   const employer=job(r.jobId)?.employer||r.employerName||'Unknown employer';
+   if(!match)return `<div class="rowitem"><div><b>${escapeHtml(employer)}</b><div class="rowmeta">${r.periodStart||'—'} → ${r.periodEnd||'—'} · ${money(r.gross,r.currency)} actual gross</div><div class="small">No exact matching forecast saved for this job, currency and pay period.</div></div><span class="pill">Unmatched</span></div>`;
+   const forecastGross=Number(match.gross)||0,actualGross=Number(r.gross)||0;
+   const forecastNet=forecastGross*(1-(Number(match.deductionPercent)||0)/100),actualNet=Number(r.net)||0;
+   const grossDiff=actualGross-forecastGross,netDiff=actualNet-forecastNet;
+   const signed=(v,c)=>`${v>0?'+':v<0?'−':''}${money(Math.abs(v),c)}`;
+   return `<div class="rowitem"><div style="min-width:0;flex:1"><b>${escapeHtml(employer)}</b><div class="rowmeta">${r.periodStart||'—'} → ${r.periodEnd||'—'} · ${multiple?'Latest of '+matches.length+' saved forecasts':'Matched forecast'}</div><div class="rowmeta">Gross · Forecast ${money(forecastGross,r.currency)} → Actual ${money(actualGross,r.currency)} · Difference <b>${signed(grossDiff,r.currency)}</b></div><div class="rowmeta">Net · Manual estimate ${money(forecastNet,r.currency)} → Actual ${money(actualNet,r.currency)} · Difference <b>${signed(netDiff,r.currency)}</b></div><div class="small">Net forecast uses the manual deduction percentage saved with that forecast; it is not an official payroll calculation.</div></div><span class="pill">Matched</span></div>`;
+  }).join(''):'<div class="empty">No payslips match the current filters.</div>';
+ }
 }
 
 function renderSatisfaction(){
@@ -649,7 +670,7 @@ function renderWeeklyPlanner(){
 $('addJobBtn').onclick=()=>{let employer=$('employerName').value.trim(),title=$('jobTitle').value.trim(),rate=Number($('jobRate').value);if(!employer||!Number.isFinite(rate)||rate<0){toast(lang==='fr'?'Entrez un employeur et un taux valide.':'Enter an employer and a valid hourly rate.');return}if(activeJobs().length>=3){toast(t('limitReached'));return}state.jobs.push({id:uid(),employer,title,rate,currency:$('jobCurrency').value,frequency:$('jobFrequency').value,status:'active',createdAt:new Date().toISOString()});save();$('employerName').value='';$('jobTitle').value='';$('jobRate').value='';render();toast(t('jobAdded'))};
 $('jobList').onclick=e=>{let b=e.target.closest('button');if(!b)return;let j=job(b.dataset.pause||b.dataset.resume||b.dataset.end||b.dataset.rate);if(!j)return;if(b.dataset.pause){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de mettre cet emploi en pause.':'Clock out before pausing this job.');return}j.status='paused';toast(t('jobPaused'))}if(b.dataset.resume){if(activeJobs().length>=3){toast(t('limitReached'));return}j.status='active';toast(t('jobResumed'))}if(b.dataset.end){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de terminer cet emploi.':'Clock out before ending this job.');return}if(!confirm(t('confirmEnd')))return;j.status='ended';toast(t('jobEnded'))}if(b.dataset.rate){let v=prompt(lang==='fr'?'Nouveau taux horaire :':'New hourly rate:',String(j.rate));if(v!==null&&v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0){j.rate=Number(v);toast(t('rateSaved'))}}save();render()};
 $('payrollProfileList').addEventListener('change',e=>{const el=e.target.closest('[data-pf]');if(!el)return;const card=el.closest('.payroll-card'),jobId=el.dataset.job;const mode=card.querySelector('[data-pf="overtimeMode"]').value;card.querySelector('[data-pf="overtimeHours"]').disabled=mode==='automatic';card.querySelector('[data-pf="overtimeThreshold"]').disabled=mode!=='automatic';});
-$('payrollProfileList').$('savePayslip').addEventListener('click',()=>{
+$('savePayslip').addEventListener('click',()=>{
  const jobId=$('psJob').value,j=job(jobId),payDate=$('psPayDate').value,periodStart=$('psPeriodStart').value,periodEnd=$('psPeriodEnd').value;
  const hours=Number($('psHours').value),gross=Number($('psGross').value),net=Number($('psNet').value),currency=$('psCurrency').value;
  if(!j){toast('Add a job in Profile before recording a payslip.');return}
@@ -659,6 +680,67 @@ $('payrollProfileList').$('savePayslip').addEventListener('click',()=>{
  if(net>gross&&!confirm('Net pay is higher than gross pay. Save these values anyway?'))return;
  state.payslips.push({id:uid(),jobId,employerName:j.employer,payDate,periodStart,periodEnd,hours,gross,net,currency,notes:$('psNotes').value.trim(),createdAt:new Date().toISOString()});
  save();['psPayDate','psPeriodStart','psPeriodEnd','psHours','psGross','psNet','psNotes'].forEach(id=>$(id).value='');renderPayslips();toast('Payslip record saved.');
+});
+let pendingPayslipCsvRows=[];
+const normalizeCsvHeader=value=>String(value||'').replace(/^\uFEFF/,'').trim().toLowerCase().replace(/[ _-]+/g,'');
+function parseCsvText(text){
+ const rows=[];let row=[],field='',quoted=false;
+ for(let i=0;i<text.length;i++){
+  const ch=text[i],next=text[i+1];
+  if(quoted){if(ch==='"'&&next==='"'){field+='"';i++}else if(ch==='"'){quoted=false}else field+=ch;continue}
+  if(ch==='"'&&field===''){quoted=true;continue}
+  if(ch===','){row.push(field);field='';continue}
+  if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';continue}
+  if(ch==='\r'){if(next==='\n')continue;row.push(field);rows.push(row);row=[];field='';continue}
+  field+=ch;
+ }
+ if(field!==''||row.length){row.push(field);rows.push(row)}
+ return rows.filter(r=>r.some(v=>String(v).trim()!==''));
+}
+function csvDateValid(value){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(new Date(value+'T12:00:00').getTime())}
+function preparePayslipImport(csvText){
+ const rows=parseCsvText(csvText);if(rows.length<2)throw new Error('The CSV has no data rows.');
+ const headers=rows[0].map(normalizeCsvHeader),index={};headers.forEach((h,i)=>index[h]=i);
+ const aliases={payDate:['paydate'],employer:['employer','employername'],periodStart:['periodstart'],periodEnd:['periodend'],hours:['paidhours','hours'],gross:['gross','grosspay'],net:['net','netpay'],currency:['currency'],notes:['notes']};
+ const col={};for(const [key,names] of Object.entries(aliases)){col[key]=names.map(n=>index[n]).find(v=>v!==undefined)}
+ const required=['payDate','employer','periodStart','periodEnd','hours','gross','net'];
+ if(required.some(k=>col[k]===undefined))throw new Error('Required columns: Pay date, Employer, Period start, Period end, Paid hours, Gross, Net.');
+ const accepted=[],rejected=[];
+ rows.slice(1).forEach((cells,i)=>{
+  const get=k=>col[k]===undefined?'':String(cells[col[k]]??'').trim();
+  const payDate=get('payDate'),employer=get('employer'),periodStart=get('periodStart'),periodEnd=get('periodEnd');
+  const hours=Number(get('hours')),gross=Number(get('gross')),net=Number(get('net')),currency=(get('currency')||'CAD').toUpperCase();
+  let reason='';
+  if(!employer)reason='Employer is missing';
+  else if(!csvDateValid(payDate)||!csvDateValid(periodStart)||!csvDateValid(periodEnd)||periodEnd<periodStart)reason='Invalid pay date or pay period';
+  else if(![hours,gross,net].every(Number.isFinite)||hours<0||gross<0||net<0)reason='Invalid negative or non-numeric amount';
+  else if(!['CAD','USD'].includes(currency))reason='Currency must be CAD or USD';
+  const matchedJob=state.jobs.find(j=>j.employer.trim().toLowerCase()===employer.toLowerCase());
+  if(!reason&&!matchedJob)reason='No matching employer in Profile';
+  const record=matchedJob?{jobId:matchedJob.id,employerName:matchedJob.employer,payDate,periodStart,periodEnd,hours,gross,net,currency,notes:get('notes')}:null;
+  if(!reason&&record){const duplicate=state.payslips.some(p=>p.jobId===record.jobId&&p.payDate===payDate&&p.periodStart===periodStart&&p.periodEnd===periodEnd&&Number(p.gross)===gross&&Number(p.net)===net&&String(p.currency||'CAD').toUpperCase()===currency)||accepted.some(p=>p.jobId===record.jobId&&p.payDate===payDate&&p.periodStart===periodStart&&p.periodEnd===periodEnd&&p.gross===gross&&p.net===net&&p.currency===currency);if(duplicate)reason='Duplicate payslip record'}
+  if(reason)rejected.push({line:i+2,reason});else accepted.push(record);
+ });
+ return {accepted,rejected,total:rows.length-1};
+}
+$('choosePayslipCsv').addEventListener('click',()=>$('payslipCsvFile').click());
+$('cancelPayslipImport').addEventListener('click',()=>{pendingPayslipCsvRows=[];$('payslipImportPanel').hidden=true;$('payslipCsvFile').value=''});
+$('payslipCsvFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{
+  const result=preparePayslipImport(await file.text());pendingPayslipCsvRows=result.accepted;
+  $('payslipImportPanel').hidden=false;
+  $('payslipImportSummary').textContent=`${result.total} row(s) found · ${result.accepted.length} ready to import · ${result.rejected.length} skipped`;
+  const preview=[...result.accepted.slice(0,5).map(r=>`<div class="rowitem"><div><b>${escapeHtml(r.employerName)}</b><div class="rowmeta">${r.payDate} · ${r.hours} hours · ${money(r.gross,r.currency)} gross / ${money(r.net,r.currency)} net</div></div></div>`),...result.rejected.slice(0,5).map(r=>`<div class="rowitem"><div><b>Line ${r.line} skipped</b><div class="rowmeta">${escapeHtml(r.reason)}</div></div></div>`)];
+  $('payslipImportPreview').innerHTML=preview.join('')||'<div class="empty">No valid rows to import.</div>';
+  $('confirmPayslipImport').disabled=!pendingPayslipCsvRows.length;
+ }catch(err){pendingPayslipCsvRows=[];$('payslipImportPanel').hidden=false;$('payslipImportSummary').textContent=err.message;$('payslipImportPreview').innerHTML='';$('confirmPayslipImport').disabled=true;}
+});
+$('confirmPayslipImport').addEventListener('click',()=>{
+ if(!pendingPayslipCsvRows.length)return;
+ const count=pendingPayslipCsvRows.length;
+ pendingPayslipCsvRows.forEach(r=>state.payslips.push({...r,id:uid(),createdAt:new Date().toISOString(),importedFromCsv:true}));
+ pendingPayslipCsvRows=[];save();$('payslipImportPanel').hidden=true;$('payslipCsvFile').value='';$('confirmPayslipImport').disabled=true;renderPayslips();toast(`${count} payslip record(s) imported.`);
 });
 $('exportPayslips').addEventListener('click',()=>{
  if(!getFilteredPayslips().length){toast('There are no matching payslips to export.');return}
