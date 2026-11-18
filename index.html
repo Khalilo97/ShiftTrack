@@ -1,4 +1,6 @@
 
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -196,11 +198,18 @@ button{cursor:pointer}
 </div>
 <div class="sectionhead"><h2>Before vs. after work</h2></div><div class="card" id="satComparison"><div class="empty">Your comparison will appear after you save check-ins.</div></div>
 <div class="sectionhead"><h2>Shift-by-shift change</h2></div><div class="card rows" id="satShiftChange"><div class="empty">Your paired check-ins will appear here.</div></div>
+<div class="sectionhead"><h2>Weekly satisfaction trend</h2></div><div class="card rows" id="satWeeklyTrend"><div class="empty">Your weekly satisfaction trend will appear here.</div></div>
 <div class="sectionhead"><h2>Biggest rating changes by shift</h2></div><div class="card rows" id="satBiggestChanges"><div class="empty">Paired shift ratings will appear here.</div></div>
 <div class="sectionhead"><h2>Rating distribution</h2></div><div class="card rows" id="satDistribution"><div class="empty">Your rating distribution will appear after you save check-ins.</div></div>
 <div class="sectionhead"><h2>Satisfaction by day of week</h2></div><div class="card rows" id="satByWeekday"><div class="empty">Your weekday patterns will appear after you save check-ins.</div></div>
 <div class="sectionhead"><h2>Satisfaction by employer</h2></div><div class="card rows" id="satByJob"><div class="empty">No satisfaction data yet.</div></div>
-<div class="sectionhead"><h2>Recent check-ins</h2><button class="secondary" id="satExportBtn" type="button">Export satisfaction CSV</button></div><div class="card rows" id="satRecent"><div class="empty">Your saved check-ins will appear here.</div></div>
+<div class="sectionhead"><h2>Recent check-ins</h2><button class="secondary" id="satExportBtn" type="button">Export satisfaction CSV</button></div>
+<div class="card" style="margin-bottom:12px"><div class="grid">
+ <div class="field"><label for="satSearch">Search check-ins</label><input id="satSearch" type="search" placeholder="Search employer or note"></div>
+ <div class="field"><label for="satScoreFilter">Rating</label><select id="satScoreFilter"><option value="all">All ratings</option><option value="low">1–2 · Low</option><option value="3">3 · Okay</option><option value="4">4 · Good</option><option value="5">5 · Excellent</option></select></div>
+ <div class="field"><label for="satPhaseFilter">Check-in phase</label><select id="satPhaseFilter"><option value="all">Before and after</option><option value="Before shift">Before shift</option><option value="After shift">After shift</option></select></div>
+</div><div class="small" style="margin-top:6px">Search and filters apply to the recent check-in list below.</div></div>
+<div class="card rows" id="satRecent"><div class="empty">Your saved check-ins will appear here.</div></div>
 <p class="small" style="margin-top:12px">These ratings reflect your own check-ins. They describe patterns, not proof that a job or shift caused a particular feeling. Skipped check-ins are not counted.</p>
 </section>
 <section class="page" id="profile">
@@ -358,6 +367,9 @@ function exportSatisfactionCsv(){
  const selected=$('satEmployerFilter')?.value||'all';
  const range=$('satDateFilter')?.value||'all';
  const cutoff=range==='all'?null:Date.now()-Number(range)*24*60*60*1000;
+ const query=($('satSearch')?.value||'').trim().toLowerCase();
+ const scoreChoice=$('satScoreFilter')?.value||'all';
+ const phaseChoice=$('satPhaseFilter')?.value||'all';
  const rows=[['Date','Employer','Job title','Check-in','Rating out of 5','Note']];
  state.records.forEach(r=>{
   if(selected!=='all'&&r.jobId!==selected)return;
@@ -367,7 +379,13 @@ function exportSatisfactionCsv(){
   const j=job(r.jobId),employer=j?.employer||'Unknown job',title=j?.title||'';
   [['Before shift',r.satisfactionBefore,r.clockIn||r.date],['After shift',r.satisfactionAfter,r.clockOut||r.date]].forEach(([phase,item,date])=>{
    if(!item||!Number(item.score))return;
-   rows.push([date?new Date(date).toISOString():'',employer,title,phase,String(item.score),item.note||'']);
+   const rating=Number(item.score);
+   if(phaseChoice!=='all'&&phase!==phaseChoice)return;
+   if(scoreChoice==='low'&&rating>2)return;
+   if(['3','4','5'].includes(scoreChoice)&&rating!==Number(scoreChoice))return;
+   const searchable=`${phase} ${employer} ${title} ${item.note||''} ${date||''}`.toLowerCase();
+   if(query&&!searchable.includes(query))return;
+   rows.push([date?new Date(date).toISOString():'',employer,title,phase,String(rating),item.note||'']);
   });
  });
  if(rows.length===1){alert('There are no satisfaction check-ins to export yet.');return;}
@@ -426,6 +444,25 @@ function renderSatisfaction(){
   <div class="rowitem"><div><div class="rowtitle">Lower after work</div><div class="rowmeta">After-shift rating was lower</div></div><b>${lower}</b></div>
   <div class="mutedbox">Based on ${paired.length} shifts with both ratings. Average change: ${avgChange>0?'+':''}${avgChange.toFixed(1)} points. This describes the ratings; it does not explain why they changed.</div>`:'<div class="empty">No shifts have both a before-shift and after-shift rating yet.</div>';
 
+ const weeklyBuckets=new Map();
+ records.forEach(r=>{
+  const dateValue=r.clockOut||r.clockIn||r.date;
+  if(!dateValue)return;
+  const d=new Date(dateValue);
+  if(!Number.isFinite(d.getTime()))return;
+  const monday=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+  const key=`${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+  if(!weeklyBuckets.has(key))weeklyBuckets.set(key,[]);
+  if(Number(r.satisfactionBefore?.score)>0)weeklyBuckets.get(key).push(Number(r.satisfactionBefore.score));
+  if(Number(r.satisfactionAfter?.score)>0)weeklyBuckets.get(key).push(Number(r.satisfactionAfter.score));
+ });
+ const weeklyRows=[...weeklyBuckets.entries()].map(([key,values])=>({key,values,average:avg(values)})).filter(x=>x.values.length).sort((a,b)=>a.key.localeCompare(b.key)).slice(-12);
+ $('satWeeklyTrend').innerHTML=weeklyRows.length?weeklyRows.map(x=>{
+  const label=new Date(`${x.key}T12:00:00`).toLocaleDateString(lang==='fr'?'fr-CA':'en-CA',{month:'short',day:'numeric'});
+  return `<div class="rowitem"><div style="flex:1;min-width:0"><div class="rowtitle">Week of ${label}</div><div class="progress" style="margin-top:7px"><span style="width:${Math.max(0,Math.min(100,x.average/5*100))}%"></span></div><div class="rowmeta">${x.values.length} ratings</div></div><div class="rowright"><b>${fmt(x.average)}</b></div></div>`;
+ }).join(''):'<div class="empty">No dated satisfaction ratings in this range.</div>';
+
  const rankedChanges=paired.map(r=>{
   const beforeScore=Number(r.satisfactionBefore.score),afterScore=Number(r.satisfactionAfter.score);
   return {r,beforeScore,afterScore,change:afterScore-beforeScore,date:r.clockOut||r.clockIn||r.date,employer:job(r.jobId)?.employer||'Unknown job'};
@@ -457,9 +494,47 @@ function renderSatisfaction(){
  const groups={};records.forEach(r=>{const j=job(r.jobId),key=r.jobId||'unknown';groups[key]??={name:j?.employer||'Unknown job',before:[],after:[],count:0};if(r.satisfactionBefore?.score){groups[key].before.push(Number(r.satisfactionBefore.score));groups[key].count++}if(r.satisfactionAfter?.score){groups[key].after.push(Number(r.satisfactionAfter.score));groups[key].count++}});
  const vals=Object.values(groups).filter(g=>g.count);
  $('satByJob').innerHTML=vals.length?vals.map(g=>{const ba=avg(g.before),aa=avg(g.after),ga=avg([...g.before,...g.after]);return `<div class="rowitem"><div><div class="rowtitle">${escapeHtml(g.name)}</div><div class="rowmeta">Before ${fmt(ba)} · After ${fmt(aa)} · ${g.count} ratings</div></div><div class="rowright"><b>${fmt(ga)}</b></div></div>`}).join(''):'<div class="empty">No satisfaction data yet.</div>';
- const recent=[];records.forEach(r=>{const employer=job(r.jobId)?.employer||'Unknown job';if(r.satisfactionBefore)recent.push({phase:'Before shift',entry:r.satisfactionBefore,date:r.clockIn||r.date,employer});if(r.satisfactionAfter)recent.push({phase:'After shift',entry:r.satisfactionAfter,date:r.clockOut||r.date,employer})});
+ const recent=[];records.forEach(r=>{const employer=job(r.jobId)?.employer||'Unknown job';if(r.satisfactionBefore)recent.push({recordId:r.id,phaseKey:'satisfactionBefore',phase:'Before shift',entry:r.satisfactionBefore,date:r.clockIn||r.date,employer});if(r.satisfactionAfter)recent.push({recordId:r.id,phaseKey:'satisfactionAfter',phase:'After shift',entry:r.satisfactionAfter,date:r.clockOut||r.date,employer})});
  recent.sort((a,b)=>(b.entry.createdAt||b.date||'').localeCompare(a.entry.createdAt||a.date||''));
- $('satRecent').innerHTML=recent.length?recent.slice(0,20).map(x=>`<div class="rowitem"><div><div class="rowtitle">${x.phase} · ${escapeHtml(x.employer)}</div><div class="rowmeta">${x.date?new Date(x.date).toLocaleString(lang==='fr'?'fr-CA':'en-CA',{dateStyle:'medium',timeStyle:'short'}):'—'}${x.entry.note?' · '+escapeHtml(x.entry.note):''}</div></div><div class="rowright"><b>${Number(x.entry.score)}/5</b></div></div>`).join(''):'<div class="empty">Your saved check-ins will appear here.</div>';
+ const searchEl=$('satSearch'),scoreEl=$('satScoreFilter'),phaseEl=$('satPhaseFilter');
+ const drawRecent=()=>{
+  const query=(searchEl?.value||'').trim().toLowerCase(),scoreChoice=scoreEl?.value||'all',phaseChoice=phaseEl?.value||'all';
+  const filtered=recent.filter(x=>{
+   if(phaseChoice!=='all'&&x.phase!==phaseChoice)return false;
+   const rating=Number(x.entry.score);
+   if(scoreChoice==='low'&&rating>2)return false;
+   if(['3','4','5'].includes(scoreChoice)&&rating!==Number(scoreChoice))return false;
+   const searchable=`${x.phase} ${x.employer} ${x.entry.note||''} ${x.date||''}`.toLowerCase();
+   return !query||searchable.includes(query);
+  });
+  $('satRecent').innerHTML=filtered.length?filtered.slice(0,50).map(x=>`<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${x.phase} · ${escapeHtml(x.employer)}</div><div class="rowmeta">${x.date?new Date(x.date).toLocaleString(lang==='fr'?'fr-CA':'en-CA',{dateStyle:'medium',timeStyle:'short'}):'—'}${x.entry.note?' · '+escapeHtml(x.entry.note):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-sat-edit="${escapeHtml(x.recordId)}" data-sat-phase="${x.phaseKey}">Edit</button><button type="button" class="danger" data-sat-delete="${escapeHtml(x.recordId)}" data-sat-phase="${x.phaseKey}">Delete</button></div></div><div class="rowright"><b>${Number(x.entry.score)}/5</b></div></div>`).join(''):`<div class="empty">No check-ins match these filters.</div>`;
+ };
+ if(searchEl)searchEl.oninput=drawRecent;
+ if(scoreEl)scoreEl.onchange=drawRecent;
+ if(phaseEl)phaseEl.onchange=drawRecent;
+ drawRecent();
+ $('satRecent').onclick=e=>{
+  const edit=e.target.closest('[data-sat-edit]'),del=e.target.closest('[data-sat-delete]');
+  const button=edit||del;if(!button)return;
+  const record=state.records.find(r=>String(r.id)===button.dataset[edit?'satEdit':'satDelete']);
+  const phase=button.dataset.satPhase;
+  if(!record||!['satisfactionBefore','satisfactionAfter'].includes(phase)||!record[phase])return;
+  if(del){
+   if(!confirm('Delete this satisfaction check-in? This cannot be undone.'))return;
+   delete record[phase];
+  }else{
+   const current=record[phase];
+   const scoreInput=prompt('Enter a new rating from 1 to 5:',String(current.score));
+   if(scoreInput===null)return;
+   const nextScore=Number(scoreInput);
+   if(!Number.isInteger(nextScore)||nextScore<1||nextScore>5){alert('Please enter a whole number from 1 to 5.');return;}
+   const noteInput=prompt('Edit your note (leave blank to clear it):',current.note||'');
+   if(noteInput===null)return;
+   record[phase]={...current,score:nextScore,note:noteInput.trim()};
+  }
+  save();
+  renderSatisfaction();
+ };
  $('satExportBtn').onclick=exportSatisfactionCsv;
 }
 
