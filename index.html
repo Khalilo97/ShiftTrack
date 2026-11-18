@@ -1,4 +1,10 @@
 
+
+
+
+
+
+
 i cant click nothing
 If nothing responds to clicks, the app may be frozen by a JavaScript error. Let's avoid using the app's buttons for now.
 
@@ -199,6 +205,29 @@ button{cursor:pointer}
  <div class="card"><div class="metric-label">Total net received</div><div class="metric" id="payslipNetTotal">$0.00</div></div>
  <div class="card"><div class="metric-label">Payslips saved</div><div class="metric" id="payslipCount">0</div></div>
 </div>
+<div class="sectionhead"><h2>Add a payslip from a document</h2><span class="pill">Photo · Screenshot · PDF</span></div>
+<div class="card" style="margin-bottom:14px">
+ <p class="small">Choose a payslip photo, screenshot, or PDF. ShiftTrack will try to read it and fill a draft. Review every value before saving. Processing happens in this browser; the document is not uploaded to ShiftTrack.</p>
+ <div class="field"><label for="psDocumentFile">Payslip document</label><input id="psDocumentFile" type="file" accept="image/*,.pdf,application/pdf"></div>
+ <div class="actions"><button class="primary" type="button" id="psReadDocument">Read document</button><button class="secondary" type="button" id="psClearDocument">Clear</button></div>
+ <div class="small" id="psOcrStatus" role="status" aria-live="polite" style="margin-top:10px">Supported: JPG, PNG, WebP and PDF. For best results use a clear, straight image.</div>
+ <div id="psDocumentPreview" style="margin-top:12px"></div>
+ <div id="psOcrReview" style="display:none;margin-top:14px">
+  <div class="mutedbox">OCR can misread dates, decimal points and amounts. Verify every field. Nothing is saved until you choose “Use extracted values” and then “Save payslip record”.</div>
+  <div class="formgrid" style="margin-top:12px">
+   <div class="field"><label for="psOcrEmployer">Employer detected</label><input id="psOcrEmployer"></div>
+   <div class="field"><label for="psOcrPayDate">Pay date</label><input id="psOcrPayDate" type="date"></div>
+   <div class="field"><label for="psOcrPeriodStart">Period start</label><input id="psOcrPeriodStart" type="date"></div>
+   <div class="field"><label for="psOcrPeriodEnd">Period end</label><input id="psOcrPeriodEnd" type="date"></div>
+   <div class="field"><label for="psOcrHours">Paid hours</label><input id="psOcrHours" type="number" min="0" step="0.01"></div>
+   <div class="field"><label for="psOcrGross">Gross pay</label><input id="psOcrGross" type="number" min="0" step="0.01"></div>
+   <div class="field"><label for="psOcrNet">Net pay</label><input id="psOcrNet" type="number" min="0" step="0.01"></div>
+   <div class="field"><label for="psOcrCurrency">Currency</label><select id="psOcrCurrency"><option>CAD</option><option>USD</option><option>EUR</option><option>TND</option></select></div>
+  </div>
+  <details><summary class="small">View extracted text</summary><pre id="psOcrRawText" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;background:var(--panel2);padding:10px;border-radius:10px;font-size:11px"></pre></details>
+  <div class="actions"><button class="primary" type="button" id="psUseExtracted">Use extracted values</button></div>
+ </div>
+</div>
 <div class="sectionhead"><h2>Add a payslip record</h2></div>
 <div class="card"><div class="grid">
  <div class="field"><label for="psJob">Employer / job</label><select id="psJob"></select></div>
@@ -301,6 +330,8 @@ button{cursor:pointer}
   <div class="actions"><button class="primary" id="saveSatisfaction" disabled>Save check-in</button><button class="secondary" id="skipSatisfaction">Skip</button></div>
  </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const $=id=>document.getElementById(id),today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`},uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36),escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -654,7 +685,78 @@ function renderWeeklyPlanner(){
 $('addJobBtn').onclick=()=>{let employer=$('employerName').value.trim(),title=$('jobTitle').value.trim(),rate=Number($('jobRate').value);if(!employer||!Number.isFinite(rate)||rate<0){toast(lang==='fr'?'Entrez un employeur et un taux valide.':'Enter an employer and a valid hourly rate.');return}if(activeJobs().length>=3){toast(t('limitReached'));return}state.jobs.push({id:uid(),employer,title,rate,currency:$('jobCurrency').value,frequency:$('jobFrequency').value,status:'active',createdAt:new Date().toISOString()});save();$('employerName').value='';$('jobTitle').value='';$('jobRate').value='';render();toast(t('jobAdded'))};
 $('jobList').onclick=e=>{let b=e.target.closest('button');if(!b)return;let j=job(b.dataset.pause||b.dataset.resume||b.dataset.end||b.dataset.rate);if(!j)return;if(b.dataset.pause){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de mettre cet emploi en pause.':'Clock out before pausing this job.');return}j.status='paused';toast(t('jobPaused'))}if(b.dataset.resume){if(activeJobs().length>=3){toast(t('limitReached'));return}j.status='active';toast(t('jobResumed'))}if(b.dataset.end){if(state.active?.jobId===j.id){toast(lang==='fr'?'Terminez le pointage actif avant de terminer cet emploi.':'Clock out before ending this job.');return}if(!confirm(t('confirmEnd')))return;j.status='ended';toast(t('jobEnded'))}if(b.dataset.rate){let v=prompt(lang==='fr'?'Nouveau taux horaire :':'New hourly rate:',String(j.rate));if(v!==null&&v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0){j.rate=Number(v);toast(t('rateSaved'))}}save();render()};
 $('payrollProfileList').addEventListener('change',e=>{const el=e.target.closest('[data-pf]');if(!el)return;const card=el.closest('.payroll-card'),jobId=el.dataset.job;const mode=card.querySelector('[data-pf="overtimeMode"]').value;card.querySelector('[data-pf="overtimeHours"]').disabled=mode==='automatic';card.querySelector('[data-pf="overtimeThreshold"]').disabled=mode!=='automatic';});
-$('payrollProfileList').$('savePayslip').addEventListener('click',()=>{
+
+// In-browser payslip OCR for images and the first page of PDFs.
+let payslipOcrText='';
+function setPayslipOcrStatus(s){if($('psOcrStatus'))$('psOcrStatus').textContent=s}
+function ocrDate(s){
+ s=String(s||'').trim();let m=s.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+ if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+ m=s.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
+ if(m){let a=+m[1],b=+m[2],y=m[3];if(a>12)return `${y}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`;if(b>12)return `${y}-${String(a).padStart(2,'0')}-${String(b).padStart(2,'0')}`;}
+ return '';
+}
+function ocrNumber(s){let x=String(s||'').replace(/[\s$€£]/g,'');if(x.includes(',')&&x.includes('.'))x=x.replace(/,/g,'');else x=x.replace(',','.');x=x.replace(/[^\d.-]/g,'');let n=Number(x);return Number.isFinite(n)&&n>=0?n:''}
+function ocrFind(lines,patterns){
+ for(let i=0;i<lines.length;i++)if(patterns.some(p=>p.test(lines[i]))){
+  let m=lines[i].match(/(?:[$€£]\s*)?(\d[\d\s,]*(?:\.\d{2}|,\d{2})|\d+(?:\.\d{1,2})?)/)||((lines[i+1]||'').match(/(?:[$€£]\s*)?(\d[\d\s,]*(?:\.\d{2}|,\d{2})|\d+(?:\.\d{1,2})?)/));
+  if(m){let n=ocrNumber(m[1]);if(n!=='')return n}
+ }
+ return '';
+}
+function parsePayslipText(text){
+ const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),all=lines.join('\n');
+ const dates=lines.flatMap(x=>x.match(/\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g)||[]).map(ocrDate).filter(Boolean);
+ const period=lines.find(x=>/(pay period|période|periode)/i.test(x))||'';
+ const pd=(period.match(/\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g)||[]).map(ocrDate).filter(Boolean);
+ const employer=lines.find(x=>/(employer|company|employeur|entreprise)\s*[:#-]/i.test(x))?.replace(/^.*?(?:employer|company|employeur|entreprise)\s*[:#-]\s*/i,'')||'';
+ return {employer,payDate:dates[0]||'',periodStart:pd[0]||dates[1]||'',periodEnd:pd[1]||dates[2]||'',
+ hours:ocrFind(lines,[/\bpaid hours\b/i,/\btotal hours\b/i,/\bhours worked\b/i,/heures (?:payées|travail)/i]),
+ gross:ocrFind(lines,[/\bgross\b/i,/\btotal earnings\b/i,/salaire brut/i,/revenu brut/i]),
+ net:ocrFind(lines,[/\bnet pay\b/i,/\bnet payable\b/i,/salaire net/i,/net à payer/i,/take.home/i]),
+ currency:/\bUSD\b|US\s*\$/i.test(all)?'USD':/\bEUR\b|€/i.test(all)?'EUR':/\bTND\b|DT\b/i.test(all)?'TND':'CAD'};
+}
+async function payslipFileCanvas(file){
+ if(file.type==='application/pdf'){
+  if(!window.pdfjsLib)throw Error('PDF reader did not load. Check your internet connection.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,page=await pdf.getPage(1),vp=page.getViewport({scale:2}),c=document.createElement('canvas');
+  c.width=vp.width;c.height=vp.height;await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  if(pdf.numPages>1)setPayslipOcrStatus(`PDF has ${pdf.numPages} pages. Reading page 1 only. Upload separate page screenshots for other pages.`);
+  return c;
+ }
+ if(!file.type.startsWith('image/'))throw Error('Choose an image or PDF file.');
+ const bitmap=await createImageBitmap(file),c=document.createElement('canvas'),scale=Math.min(2,2400/Math.max(bitmap.width,bitmap.height));
+ c.width=Math.round(bitmap.width*scale);c.height=Math.round(bitmap.height*scale);c.getContext('2d').drawImage(bitmap,0,0,c.width,c.height);return c;
+}
+$('psReadDocument').addEventListener('click',async()=>{
+ const file=$('psDocumentFile').files?.[0];if(!file){setPayslipOcrStatus('Choose a payslip image or PDF first.');return}
+ if(!window.Tesseract){setPayslipOcrStatus('OCR library did not load. Check internet and refresh.');return}
+ $('psReadDocument').disabled=true;$('psOcrReview').style.display='none';
+ try{
+  setPayslipOcrStatus('Preparing document…');const canvas=await payslipFileCanvas(file);
+  $('psDocumentPreview').innerHTML=file.type.startsWith('image/')?`<img alt="Payslip preview" style="max-width:100%;max-height:340px;border-radius:12px;border:1px solid var(--line)" src="${canvas.toDataURL('image/jpeg',.85)}">`:'PDF loaded; processing page 1.';
+  const result=await Tesseract.recognize(canvas,'eng+fra',{logger:m=>{if(m.status==='recognizing text')setPayslipOcrStatus(`Reading document… ${Math.round((m.progress||0)*100)}%`)}});
+  payslipOcrText=result.data.text||'';const v=parsePayslipText(payslipOcrText);
+  $('psOcrEmployer').value=v.employer;$('psOcrPayDate').value=v.payDate;$('psOcrPeriodStart').value=v.periodStart;$('psOcrPeriodEnd').value=v.periodEnd;
+  $('psOcrHours').value=v.hours;$('psOcrGross').value=v.gross;$('psOcrNet').value=v.net;$('psOcrCurrency').value=v.currency;
+  $('psOcrRawText').textContent=payslipOcrText;$('psOcrReview').style.display='block';
+  setPayslipOcrStatus('Extraction complete. Review and correct every value; OCR is not guaranteed accurate.');
+ }catch(e){console.error(e);setPayslipOcrStatus('Could not read document: '+(e.message||'Unknown error'))}
+ finally{$('psReadDocument').disabled=false}
+});
+$('psClearDocument').addEventListener('click',()=>{$('psDocumentFile').value='';$('psDocumentPreview').innerHTML='';$('psOcrReview').style.display='none';$('psOcrRawText').textContent='';payslipOcrText='';setPayslipOcrStatus('Choose a payslip image or PDF.')});
+$('psUseExtracted').addEventListener('click',()=>{
+ const emp=$('psOcrEmployer').value.trim(),match=state.jobs.find(j=>j.employer.trim().toLowerCase()===emp.toLowerCase());
+ if(match)$('psJob').value=match.id;
+ $('psPayDate').value=$('psOcrPayDate').value;$('psPeriodStart').value=$('psOcrPeriodStart').value;$('psPeriodEnd').value=$('psOcrPeriodEnd').value;
+ $('psHours').value=$('psOcrHours').value;$('psGross').value=$('psOcrGross').value;$('psNet').value=$('psOcrNet').value;$('psCurrency').value=$('psOcrCurrency').value;
+ $('psNotes').value='Imported from document; verify against original payslip.';
+ $('psPayDate').scrollIntoView({behavior:'smooth',block:'center'});
+ setPayslipOcrStatus(match?'Values copied. Confirm the selected employer and all fields, then save.':'Values copied. Employer was not matched automatically; select the correct job and verify all fields.');
+});
+
+$('savePayslip').addEventListener('click',()=>{
  const jobId=$('psJob').value,j=job(jobId),payDate=$('psPayDate').value,periodStart=$('psPeriodStart').value,periodEnd=$('psPeriodEnd').value;
  const hours=Number($('psHours').value),gross=Number($('psGross').value),net=Number($('psNet').value),currency=$('psCurrency').value;
  if(!j){toast('Add a job in Profile before recording a payslip.');return}
