@@ -208,6 +208,11 @@ button{cursor:pointer}
 <div class="actions"><button class="primary" id="savePayslip">Save payslip record</button></div>
 <p class="small">Enter the figures exactly as shown on your payslip. This version stores a manual record; it does not read or verify uploaded payslip documents.</p></div>
 <div class="sectionhead"><h2>Saved payslips</h2><button class="secondary" id="exportPayslips">Export CSV</button></div>
+<div class="card" style="margin-bottom:12px"><div class="grid">
+ <div class="field"><label for="psEmployerFilter">Employer</label><select id="psEmployerFilter"><option value="all">All employers</option></select></div>
+ <div class="field"><label for="psDateFilter">Pay date range</label><select id="psDateFilter"><option value="all">All time</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option></select></div>
+ <div class="field"><label for="psSearch">Search notes / dates</label><input id="psSearch" type="search" placeholder="Search saved payslips"></div>
+</div></div>
 <div class="card rows" id="payslipList"><div class="empty">No payslip records yet.</div></div>
 </section>
 
@@ -422,14 +427,41 @@ function exportSatisfactionCsv(){
  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 }
 
+function getFilteredPayslips(){
+ const employerFilter=$('psEmployerFilter')?.value||'all';
+ const range=$('psDateFilter')?.value||'all';
+ const query=($('psSearch')?.value||'').trim().toLowerCase();
+ const cutoff=range==='all'?null:Date.now()-Number(range)*86400000;
+ return state.payslips.filter(r=>{
+  if(employerFilter!=='all'&&r.jobId!==employerFilter)return false;
+  if(cutoff!==null){
+   const timestamp=r.payDate?new Date(r.payDate+'T23:59:59').getTime():NaN;
+   if(!Number.isFinite(timestamp)||timestamp<cutoff)return false;
+  }
+  const j=job(r.jobId);
+  const text=`${j?.employer||r.employerName||''} ${j?.title||''} ${r.payDate||''} ${r.periodStart||''} ${r.periodEnd||''} ${r.notes||''}`.toLowerCase();
+  return !query||text.includes(query);
+ }).sort((a,b)=>(b.payDate||'').localeCompare(a.payDate||''));
+}
 function renderPayslips(){
  const jobSelect=$('psJob');
  if(jobSelect){const previous=jobSelect.value;jobSelect.innerHTML=state.jobs.map(j=>`<option value="${escapeHtml(j.id)}">${escapeHtml(j.employer)} · ${escapeHtml(j.title||'')}</option>`).join('');if(state.jobs.some(j=>j.id===previous))jobSelect.value=previous;jobSelect.disabled=!state.jobs.length;}
- const records=state.payslips.slice().sort((a,b)=>(b.payDate||'').localeCompare(a.payDate||''));
- const gross=records.reduce((s,r)=>s+Number(r.gross||0),0),net=records.reduce((s,r)=>s+Number(r.net||0),0);
- $('payslipGrossTotal').textContent=money(gross,'CAD');$('payslipNetTotal').textContent=money(net,'CAD');$('payslipCount').textContent=records.length;
- $('payslipList').innerHTML=records.length?records.map(r=>{const j=job(r.jobId),employer=j?.employer||r.employerName||'Unknown employer';return `<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${escapeHtml(employer)} · ${r.payDate?dateFmt(r.payDate,{year:'numeric',month:'short',day:'numeric'}):'Pay date not set'}</div><div class="rowmeta">Period: ${r.periodStart||'—'} to ${r.periodEnd||'—'} · ${Number(r.hours||0).toFixed(2)} hours</div><div class="rowmeta">Gross: ${money(r.gross,r.currency)} · Net: ${money(r.net,r.currency)}${r.notes?' · '+escapeHtml(r.notes):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-edit-payslip="${escapeHtml(r.id)}">Edit</button><button type="button" class="danger" data-delete-payslip="${escapeHtml(r.id)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No payslip records yet. Add your first record above.</div>';
+ const employerFilter=$('psEmployerFilter');
+ if(employerFilter){
+  const current=employerFilter.value||'all';
+  const jobs=[...new Set(state.payslips.map(r=>r.jobId).filter(Boolean))].map(id=>({id,name:job(id)?.employer||state.payslips.find(r=>r.jobId===id)?.employerName||'Unknown employer'}));
+  employerFilter.innerHTML='<option value="all">All employers</option>'+jobs.map(j=>`<option value="${escapeHtml(j.id)}">${escapeHtml(j.name)}</option>`).join('');
+  employerFilter.value=jobs.some(j=>j.id===current)?current:'all';
+ }
+ const records=getFilteredPayslips();
+ const totals={};records.forEach(r=>{const c=r.currency||'CAD';totals[c]??={gross:0,net:0};totals[c].gross+=Number(r.gross||0);totals[c].net+=Number(r.net||0)});
+ const currencies=Object.keys(totals).sort();
+ $('payslipGrossTotal').textContent=currencies.length?currencies.map(c=>money(totals[c].gross,c)).join(' · '):money(0,'CAD');
+ $('payslipNetTotal').textContent=currencies.length?currencies.map(c=>money(totals[c].net,c)).join(' · '):money(0,'CAD');
+ $('payslipCount').textContent=records.length;
+ $('payslipList').innerHTML=records.length?records.map(r=>{const j=job(r.jobId),employer=j?.employer||r.employerName||'Unknown employer';return `<div class="rowitem"><div style="min-width:0;flex:1"><div class="rowtitle">${escapeHtml(employer)} · ${r.payDate?dateFmt(r.payDate,{year:'numeric',month:'short',day:'numeric'}):'Pay date not set'}</div><div class="rowmeta">Period: ${r.periodStart||'—'} to ${r.periodEnd||'—'} · ${Number(r.hours||0).toFixed(2)} hours</div><div class="rowmeta">Gross: ${money(r.gross,r.currency)} · Net: ${money(r.net,r.currency)}${r.notes?' · '+escapeHtml(r.notes):''}</div><div class="actions" style="margin-top:7px"><button type="button" class="secondary" data-edit-payslip="${escapeHtml(r.id)}">Edit</button><button type="button" class="danger" data-delete-payslip="${escapeHtml(r.id)}">Delete</button></div></div></div>`}).join(''):'<div class="empty">No payslips match these filters.</div>';
 }
+
 function renderSatisfaction(){
  const allRecords=state.records.slice().sort((a,b)=>(b.clockOut||b.clockIn||'').localeCompare(a.clockOut||a.clockIn||''));
  const filterEl=$('satEmployerFilter');
@@ -589,7 +621,10 @@ function render(){
  fillJobSelect('clockJob');fillJobSelect('shiftJob');$('clockJob').disabled=!!state.active||!activeJobs().length;$('clockInBtn').disabled=!!state.active||!activeJobs().length;$('clockOutBtn').disabled=!state.active;$('breakBtn').disabled=!state.active;$('breakBtn').textContent=state.active?.breakOpen?t('endBreak'):t('startBreak');
  $('clockStatus').innerHTML=state.active?`<span class="dot"></span>${state.active.breakOpen?t('onBreak'):t('clockedStatus')} · ${job(state.active.jobId)?.employer||''}`:`<span class="dot"></span>${t(activeJobs().length?'ready':'noActiveJobs')}`;$('timeStatus').textContent=state.active?(state.active.breakOpen?t('onBreak'):t('clockedStatus')):t('notClocked');
  let upcoming=state.shifts.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).slice(0,4);$('homeUpcoming').innerHTML=upcoming.length?upcoming.map(shiftRow).join(''):`<div class="empty">${t('noUpcoming')}</div>`;$('homeJobCards').innerHTML=activeJobs().length?activeJobs().map(j=>`<div class="card jobcard"><div><div class="jobname">${escapeHtml(j.employer)}</div><div class="jobmeta">${escapeHtml(j.title||'')} · ${t('frequency')}: ${escapeHtml(j.frequency)}</div></div><div class="jobrate">${money(j.rate,j.currency)}<div class="small">/${lang==='fr'?'h':'hr'}</div></div></div>`).join(''):`<div class="card empty">${t('noJobs')}</div>`;
- renderPayslips();renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
+ renderPayslips();
+ ['psEmployerFilter','psDateFilter'].forEach(id=>{const el=$(id);if(el)el.onchange=renderPayslips});
+ const psSearch=$('psSearch');if(psSearch)psSearch.oninput=renderPayslips;
+ renderWeeklyPlanner();$('scheduleRows').innerHTML=state.shifts.length?state.shifts.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start)).map(s=>shiftRow(s,true)).join(''):`<div class="empty">${t('noShifts')}</div>`;$('shiftCount').textContent=`${state.shifts.length} ${state.shifts.length===1?t('shift'):t('shifts')}`;
  let total=state.records.reduce((s,r)=>s+workedMinutes(r),0),breaks=state.records.reduce((s,r)=>s+(r.breaks||[]).filter(b=>!b.paid&&b.end).reduce((x,b)=>x+duration(b.start,b.end),0),0);$('totalRecorded').textContent=minsFmt(total);$('recordCount').textContent=state.records.length;$('breakTotal').textContent=minsFmt(breaks);
  $('timeRows').innerHTML=state.records.length?mergeTimeRecords(state.records).map(r=>`<tr><td>${dateFmt(r.date)}</td><td>${escapeHtml(job(r.jobId)?.employer||'—')}</td><td>${timeFmt(r.clockIn)}</td><td>${timeFmt(r.clockOut)}</td><td><b>${minsFmt(workedMinutes(r))}</b></td><td>${money(recordGross(r),r.currency||'CAD')}</td><td><button class="danger" data-delete-time="${escapeHtml(r.id||'')}">Delete</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">${t('noRecords')}</td></tr>`;
  let month=monthRecords();$('moneyWeek').textContent=moneySummary(wr);$('moneyMonth').textContent=moneySummary(month);$('moneyHours').textContent=minsFmt(total);$('moneyJobs').textContent=new Set(state.records.map(r=>r.jobId)).size;
@@ -626,9 +661,9 @@ $('payrollProfileList').$('savePayslip').addEventListener('click',()=>{
  save();['psPayDate','psPeriodStart','psPeriodEnd','psHours','psGross','psNet','psNotes'].forEach(id=>$(id).value='');renderPayslips();toast('Payslip record saved.');
 });
 $('exportPayslips').addEventListener('click',()=>{
- if(!state.payslips.length){toast('There are no payslips to export.');return}
+ if(!getFilteredPayslips().length){toast('There are no matching payslips to export.');return}
  const rows=[['Pay date','Employer','Job title','Period start','Period end','Paid hours','Gross','Net','Currency','Notes']];
- state.payslips.slice().sort((a,b)=>(a.payDate||'').localeCompare(b.payDate||'')).forEach(r=>{const j=job(r.jobId);rows.push([r.payDate||'',j?.employer||r.employerName||'',j?.title||'',r.periodStart||'',r.periodEnd||'',r.hours??'',r.gross??'',r.net??'',r.currency||'CAD',r.notes||''])});
+ getFilteredPayslips().slice().sort((a,b)=>(a.payDate||'').localeCompare(b.payDate||'')).forEach(r=>{const j=job(r.jobId);rows.push([r.payDate||'',j?.employer||r.employerName||'',j?.title||'',r.periodStart||'',r.periodEnd||'',r.hours??'',r.gross??'',r.net??'',r.currency||'CAD',r.notes||''])});
  const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
  const blob=new Blob(['\\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ShiftTrack-payslips-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 });
